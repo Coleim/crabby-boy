@@ -1,4 +1,6 @@
 mod header;
+mod mappings;
+
 use header::CartdrigeHeader;
 
 fn main() -> Result<(), String> {
