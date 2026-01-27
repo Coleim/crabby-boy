@@ -13,27 +13,6 @@
 
 ---
 
-## 🎨 When Will You See Graphics?
-
-### Quick Answer: **Week 6-8** if following the roadmap below
-
-**Timeline to First Visual:**
-1. **Weeks 1-5:** CPU implementation (no visuals, but crucial foundation)
-2. **Week 6:** First pixels on screen! (background rendering)
-3. **Week 7-8:** Sprites and full graphics
-4. **Week 9-10:** Playable games!
-
-**Why the wait?** The CPU must execute code that writes to video memory. Without a working CPU, there's nothing to display. Once you have ~100 CPU instructions working, you can implement the PPU (graphics) and see your first pixels!
-
-**Early Visual Milestones:**
-- **First pixels:** Single color tiles from VRAM
-- **Background layer:** Static background from tile map
-- **Scrolling background:** Moving scenery (like in Tetris)
-- **Sprites:** Characters and objects moving on screen
-- **Full game:** Everything working together!
-
----
-
 ## 🎯 Game Boy Emulator Development Roadmap
 
 ### **Phase 1: CPU Core** ⚡ (Your Next Steps!)
