@@ -34,6 +34,11 @@ impl CPU {
         (high << 8) | low
     }
 
+    fn set_hl(&mut self, val: u16) {
+        self.h = (val >> 8) as u8;
+        self.l = (val & 0xFF) as u8;
+    }
+
     pub fn execute(&mut self, mem: &mut [u8]) -> bool {
         let opcode = mem[self.pc as usize];
         println!("Parsing OP CODE: {:#X}", opcode);
@@ -61,6 +66,7 @@ impl CPU {
                 println!("LD [a16], A 3  16");
                 let addr = self.read16bytes(mem, next_pc);
                 mem[addr as usize] = self.a; //TODO: Replace with bus.write(addr, self.a); later
+                next_pc += 2;
                 //TODO handle memory bus
             }
             0xF3 => {
@@ -96,6 +102,22 @@ impl CPU {
                     self.f |= 0x10;
                 }
                 next_pc += 1;
+            }
+            0xE0 => {
+                println!("LDH [a8], A 2  12 - - - -");
+                let a8 = mem[next_pc as usize] as u16;
+                let addr = 0xFF00 | a8;
+                mem[addr as usize] = self.a;
+                next_pc += 1;
+            }
+            0x21 => {
+                println!("LD HL, n16 3  12");
+                let n16 = self.read16bytes(mem, next_pc);
+                self.set_hl(n16);
+                next_pc += 2;
+            }
+            0xCD => {
+                println!("CALL a16 3  24 - - - -");
             }
             _ => {
                 println!("Something else");
