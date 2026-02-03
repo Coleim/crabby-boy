@@ -1,8 +1,8 @@
-use crate::mappings::cartridge_type_map::CARTRIDGE_TYPE_MAP;
-use crate::mappings::licensee_map::NEW_LICENSEE_MAP;
-use crate::mappings::licensee_map::OLD_LICENSEE_MAP;
-use crate::mappings::size_map::RAM_SIZE_MAP;
-use crate::mappings::size_map::ROM_SIZE_MAP;
+use super::mappings::cartridge_type_map::CARTRIDGE_TYPE_MAP;
+use super::mappings::licensee_map::NEW_LICENSEE_MAP;
+use super::mappings::licensee_map::OLD_LICENSEE_MAP;
+use super::mappings::size_map::RAM_SIZE_MAP;
+use super::mappings::size_map::ROM_SIZE_MAP;
 
 // https://gbdev.io/pandocs/The_Cartridge_Header.html
 

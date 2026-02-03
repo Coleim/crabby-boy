@@ -1,0 +1,453 @@
+use std::num::ParseFloatError;
+
+use crate::Bus;
+
+pub struct CPU {
+    pub a: u8,
+    pub f: u8, // F = Z,N,H,C
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub h: u8,
+    pub l: u8,
+    pub pc: u16,
+    pub sp: u16,
+    pub stopped: bool,
+    pub halt: bool,
+    pub ime: bool,
+    // F = Z,N,H,C
+}
+
+impl CPU {
+    pub fn new() -> Self {
+        CPU {
+            a: 0x01,
+            f: 0xB0,
+            b: 0x00, // $00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,    // $D8
+            h: 0x01,    // $01
+            l: 0x4D,    // $4D
+            pc: 0x0100, // $0100
+            sp: 0xFFFE, // $FFFE
+            stopped: false,
+            halt: false,
+            ime: true,
+        }
+    }
+
+    fn read16bytes(&self, bus: &mut Bus, addr: u16) -> u16 {
+        let low = bus.read(addr) as u16;
+        let high = bus.read(addr.wrapping_add(1)) as u16;
+        (high << 8) | low
+    }
+
+    fn write16bytes(&mut self, bus: &mut Bus, addr: u16, value: u16) {
+        bus.write(addr, (value & 0xFF) as u8);
+        bus.write(addr.wrapping_add(1), (value >> 8) as u8);
+    }
+
+    fn split_u16(value: u16) -> (u8, u8) {
+        (((value >> 8) as u8), (value & 0xFF) as u8)
+    }
+    fn combine_u8(x: u8, y: u8) -> u16 {
+        ((x as u16) << 8) | (y as u16)
+    }
+
+    fn set_hl(&mut self, val: u16) {
+        let (h, l) = Self::split_u16(val);
+        self.h = h;
+        self.l = l;
+    }
+    fn set_bc(&mut self, val: u16) {
+        let (b, c) = Self::split_u16(val);
+        self.b = b;
+        self.c = c;
+    }
+    fn set_af(&mut self, val: u16) {
+        let (a, f) = Self::split_u16(val);
+        self.a = a;
+        self.f = f;
+    }
+    fn set_de(&mut self, val: u16) {
+        let (d, e) = Self::split_u16(val);
+        self.d = d;
+        self.e = e;
+    }
+
+    fn get_hl(&self) -> u16 {
+        Self::combine_u8(self.h, self.l)
+    }
+    fn get_bc(&self) -> u16 {
+        Self::combine_u8(self.b, self.c)
+    }
+    fn get_af(&self) -> u16 {
+        Self::combine_u8(self.a, self.f)
+    }
+    fn get_de(&self) -> u16 {
+        Self::combine_u8(self.d, self.e)
+    }
+    fn push_bc(&mut self, bus: &mut Bus) {
+        self.push_to_stack(self.get_bc(), bus);
+    }
+    fn push_af(&mut self, bus: &mut Bus) {
+        self.push_to_stack(self.get_af(), bus);
+    }
+    fn push_hl(&mut self, bus: &mut Bus) {
+        self.push_to_stack(self.get_hl(), bus);
+    }
+    fn push_de(&mut self, bus: &mut Bus) {
+        self.push_to_stack(self.get_de(), bus);
+    }
+    fn push_to_stack(&mut self, reg: u16, bus: &mut Bus) {
+        self.sp = self.sp.wrapping_sub(2);
+        self.write16bytes(bus, self.sp, reg);
+    }
+
+    fn pop_hl(&mut self, bus: &mut Bus) {
+        let stack = self.pop_from_stack(bus);
+        self.set_hl(stack);
+    }
+    fn pop_bc(&mut self, bus: &mut Bus) {
+        let stack = self.pop_from_stack(bus);
+        self.set_bc(stack);
+    }
+    fn pop_de(&mut self, bus: &mut Bus) {
+        let stack = self.pop_from_stack(bus);
+        self.set_de(stack);
+    }
+    fn pop_af(&mut self, bus: &mut Bus) {
+        let value = self.pop_from_stack(bus);
+        self.set_af(value);
+        self.f = (value & 0xF0) as u8;
+    }
+
+    fn pop_from_stack(&mut self, bus: &mut Bus) -> u16 {
+        let stack_val: u16 = self.read16bytes(bus, self.sp);
+        self.sp = self.sp.wrapping_add(2);
+        stack_val
+    }
+
+    fn load_to(&mut self, bus: &mut Bus, addr: u16, setter: fn(&mut Self, u16)) -> u16 {
+        let n16 = self.read16bytes(bus, addr);
+        setter(self, n16);
+        addr.wrapping_add(2)
+    }
+
+    fn or(&mut self, reg: u8) {
+        self.f = 0;
+        self.a = self.a | reg;
+        if self.a == 0 {
+            self.f |= 0x80;
+        }
+    }
+
+    fn increment(val: &mut u8, flag: &mut u8) {
+        *flag &= 0xDF; // Clear H flag (0xDF = 1101 1111)
+        // Check if lower nibble is 0xF before incrementing
+        if (*val & 0x0F) == 0x0F {
+            *flag |= 0x20;
+        }
+
+        *val = val.wrapping_add(1);
+
+        // Set Z flag if result is zero
+        if *val == 0 {
+            *flag |= 0x80; // Set Z flag
+        } else {
+            *flag &= !0x80; // Clear Z flag
+        }
+
+        *flag &= !0x40; // Clear N flag (always 0 for INC)
+    }
+
+    fn decrement(val: &mut u8, flag: &mut u8) {
+        // Z 1 H -
+
+        *flag &= 0xDF; // Clear H flag (0xDF = 1101 1111)
+        if (*val & 0x0F) == 0x00 {
+            *flag |= 0x20;
+        }
+
+        *val = val.wrapping_sub(1);
+        // Set Z flag if result is zero
+        if *val == 0 {
+            *flag |= 0x80; // Set Z flag
+        } else {
+            *flag &= !0x80; // Clear Z flag
+        }
+
+        *flag |= 0x40; // |0100 0000 = bit 6 forced to 1
+    }
+
+    // pub fn execute(&mut self, bus: &mut Bus) -> bool {
+    pub fn execute(&mut self, bus: &mut Bus) -> bool {
+        let opcode = bus.read(self.pc);
+
+        // println!("Parsing OP CODE: 0x{:02X}", opcode);
+        println!(
+            "PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
+            self.pc, opcode, self.sp
+        );
+        let mut next_pc: u16 = self.pc.wrapping_add(1);
+        match opcode {
+            0x00 => {}                   // NOP 1  4
+            0x10 => self.stopped = true, // STOP n8 2  4
+            0x01 => {
+                next_pc = self.load_to(bus, next_pc, Self::set_bc);
+            }
+
+            0x02 => bus.write(self.get_bc(), self.a),
+            0x12 => bus.write(self.get_de(), self.a),
+            0x22 => {
+                let hl = self.get_hl();
+                bus.write(hl, self.a);
+                self.set_hl(hl.wrapping_add(1));
+            }
+            0x32 => {
+                let hl = self.get_hl();
+                bus.write(hl, self.a);
+                self.set_hl(hl.wrapping_sub(1));
+            }
+            // INC
+            0x03 => self.set_bc(self.get_bc().wrapping_add(1)), // INC BC 1  8
+            0x13 => self.set_de(self.get_de().wrapping_add(1)), // INC DE 1 8
+            0x23 => self.set_hl(self.get_hl().wrapping_add(1)), // INC HL 1  8
+            0x33 => self.sp = self.sp.wrapping_add(1),          // INC SP 1  8
+            0x04 => CPU::increment(&mut self.b, &mut self.f),   // INC B 1  4 Z 0 H -
+            0x14 => CPU::increment(&mut self.d, &mut self.f),   // INC D 1  4 Z 0 H -
+            0x24 => CPU::increment(&mut self.h, &mut self.f),   // INC H 1  4 Z 0 H -
+            0x34 => {
+                // INC [HL] 1  12 Z 0 H -
+                let mut val = bus.read(self.get_hl());
+                CPU::increment(&mut val, &mut self.f);
+                bus.write(self.get_hl(), val);
+            }
+            0x0C => CPU::increment(&mut self.c, &mut self.f), // INC C 1  4 Z 0 H -
+            0x1C => CPU::increment(&mut self.e, &mut self.f), // INC E 1  4
+            0x2C => CPU::increment(&mut self.l, &mut self.f), // INC L 1  4
+            0x3C => CPU::increment(&mut self.a, &mut self.f), // INC A 1  4
+
+            // DEC
+            0x05 => CPU::decrement(&mut self.b, &mut self.f),
+            0x15 => CPU::decrement(&mut self.d, &mut self.f),
+            0x25 => CPU::decrement(&mut self.h, &mut self.f),
+            0x35 => {
+                // DEC [HL] 1  12 Z 1 H -
+                let mut val = bus.read(self.get_hl());
+                CPU::decrement(&mut val, &mut self.f);
+                bus.write(self.get_hl(), val);
+            }
+
+            0x0B => self.set_bc(self.get_bc().wrapping_sub(1)), // INC BC 1  8
+            0x1B => self.set_de(self.get_de().wrapping_sub(1)), // INC DE 1 8
+            0x2B => self.set_hl(self.get_hl().wrapping_sub(1)), // INC HL 1  8
+            0x3B => self.sp = self.sp.wrapping_sub(1),          // INC SP 1  8
+
+            0x0D => CPU::decrement(&mut self.c, &mut self.f),
+            0x1D => CPU::decrement(&mut self.e, &mut self.f),
+            0x2D => CPU::decrement(&mut self.l, &mut self.f),
+            0x3D => CPU::decrement(&mut self.a, &mut self.f),
+
+            0x0E => {
+                let n8 = bus.read(next_pc);
+                self.c = n8;
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0x3E => {
+                // Load n8 into A
+                let val: u8 = bus.read(next_pc);
+                self.a = val;
+                next_pc = next_pc.wrapping_add(1);
+            }
+
+            0x21 => {
+                // load n16 into HL
+                next_pc = self.load_to(bus, next_pc, Self::set_hl);
+            }
+            0x2A => {
+                let hl: u16 = self.get_hl();
+                self.a = bus.read(hl);
+                self.set_hl(hl.wrapping_add(1));
+            }
+
+            0x11 => {
+                next_pc = self.load_to(bus, next_pc, Self::set_de);
+            }
+            0x31 => {
+                next_pc = self.load_to(bus, next_pc, |this, val| this.sp = val);
+            }
+
+            0x40 => {}               //self.b = self.b, // LD B, B 1  4
+            0x41 => self.b = self.c, // LD B, C 1  4
+            0x42 => self.b = self.d, // LD B, D 1  4
+            0x43 => self.b = self.e, // LD B, E 1  4
+            0x44 => self.b = self.h,
+            0x45 => self.b = self.l,
+            0x46 => self.b = bus.read(self.get_hl()),
+            0x47 => self.b = self.a, // LD B, A 1  4
+
+            0x48 => self.c = self.b,
+            0x49 => {} // self.c = self.c,
+            0x4A => self.c = self.d,
+            0x4B => self.c = self.e,
+            0x4C => self.c = self.h,
+            0x4D => self.c = self.l,
+            0x4E => self.c = bus.read(self.get_hl()),
+            0x4F => self.c = self.a,
+
+            0x50 => self.d = self.b,
+            0x51 => self.d = self.c,
+            0x52 => {} // self.d = self.d,
+            0x53 => self.d = self.e,
+            0x54 => self.d = self.h,
+            0x56 => self.d = bus.read(self.get_hl()),
+            0x57 => self.d = self.a,
+
+            0x58 => self.e = self.b,
+            0x59 => self.e = self.c,
+            0x5A => self.e = self.d,
+            0x5B => {} // self.e = self.e,
+            0x5C => self.e = self.h,
+            0x5D => self.e = self.l,
+            0x5E => self.e = bus.read(self.get_hl()),
+            0x5F => self.e = self.a,
+
+            0x60 => self.h = self.b,
+            0x61 => self.h = self.c,
+            0x62 => self.h = self.d,
+            0x63 => self.h = self.e,
+            0x64 => {} // self.h = self.h,
+            0x65 => self.h = self.l,
+            0x66 => self.h = bus.read(self.get_hl()),
+            0x67 => self.h = self.a,
+
+            0x68 => self.l = self.b,
+            0x69 => self.l = self.c,
+            0x6A => self.l = self.d,
+            0x6B => self.l = self.e,
+            0x6C => self.l = self.h,
+            0x6D => {} // self.l = self.l,
+            0x6E => self.l = bus.read(self.get_hl()),
+            0x6F => self.l = self.a,
+
+            0x70 => bus.write(self.get_hl(), self.b),
+            0x71 => bus.write(self.get_hl(), self.c),
+            0x72 => bus.write(self.get_hl(), self.d),
+            0x73 => bus.write(self.get_hl(), self.e),
+            0x74 => bus.write(self.get_hl(), self.h),
+            0x75 => bus.write(self.get_hl(), self.l),
+            0x76 => self.halt = true, // HALT
+            0x77 => bus.write(self.get_hl(), self.a),
+
+            // LD (HL),B
+            0x78 => self.a = self.b,
+            0x79 => self.a = self.c,
+            0x7A => self.a = self.d,
+            0x7B => self.a = self.e,
+            0x7C => self.a = self.h,
+            0x7D => self.a = self.l,
+            0x7E => self.a = bus.read(self.get_hl()),
+            0x7F => {} // self.a = self.a,
+
+            0x20 => {
+                // JR NZ, e8 2  12/8
+                let e8 = bus.read(next_pc) as i8;
+                next_pc = next_pc.wrapping_add(1);
+                if (self.f & 0x80) == 0 {
+                    next_pc = next_pc.wrapping_add_signed(e8 as i16)
+                }
+            }
+            0x18 => {
+                let e8 = bus.read(next_pc) as i8 as u16;
+                next_pc = next_pc.wrapping_add(1).wrapping_add(e8);
+            }
+
+            0xC3 => {
+                let addr = self.read16bytes(bus, next_pc);
+                println!("0xC3: {:2x} ", addr);
+                next_pc = addr;
+            }
+            0xEA => {
+                let addr = self.read16bytes(bus, next_pc);
+                bus.write(addr, self.a);
+                next_pc = next_pc.wrapping_add(2);
+            }
+            0xC1 => self.pop_bc(bus),
+            0xD1 => self.pop_de(bus),
+            0xE1 => self.pop_hl(bus),
+            0xF1 => self.pop_af(bus),
+            0xF3 => self.ime = false,
+            0xD6 => {
+                // Substract n8 to A // A = A - n8
+                let val: u8 = bus.read(next_pc);
+                let a = self.a;
+                self.a = a.wrapping_sub(val);
+                self.f = 0; // 0000 0000
+                if self.a == 0 {
+                    self.f |= 0x80;
+                } // 0000 0000 | 1000 0000
+                self.f |= 0x40;
+
+                // H = did borrow happen from bit 4?
+                // H flag (half borrow)
+                if (a & 0xF) < (val & 0xF) {
+                    self.f |= 0x20;
+                }
+
+                // C = did borrow happen from bit 8?
+                // C flag (full borrow)
+                if a < val {
+                    self.f |= 0x10;
+                }
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0xE0 => {
+                // Load A into bus[a8]
+                let a8 = bus.read(next_pc) as u16;
+                let addr = 0xFF00 | a8;
+                bus.write(addr, self.a);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0xCD => {
+                // function call at addr a16
+                let ret = next_pc + 2; // Adresse de retour
+                let n16 = self.read16bytes(bus, next_pc); // Adresse cible (du CALL)
+                self.sp -= 2; // Décrémenter SP pour empiler sur la stack
+                // Ecrire l'adresse de retour sur la stack
+                self.write16bytes(bus, self.sp, ret);
+                next_pc = n16; // Aller a l'adresse du CALL
+            }
+            0xC9 => {
+                // return from fonction call
+                next_pc = self.read16bytes(bus, self.sp);
+                self.sp = self.sp.wrapping_add(2);
+            }
+            0xC5 => self.push_bc(bus),
+            0xD5 => self.push_de(bus),
+            0xE5 => self.push_hl(bus),
+            0xF5 => self.push_af(bus),
+
+            0xB0 => self.or(self.b),
+            0xB1 => self.or(self.c),
+            0xB2 => self.or(self.d),
+            0xB3 => self.or(self.e),
+            0xB4 => self.or(self.h),
+            0xB5 => self.or(self.l),
+            0xB6 => self.or(bus.read(self.get_hl())),
+            0xB7 => self.or(self.a),
+            _ => {
+                println!(
+                    "Unimplemented opcode: 0x{:02X} at PC: 0x{:04X}",
+                    opcode, self.pc
+                );
+                return false;
+            }
+        }
+        println!(" Going to addr: {:#x}", next_pc);
+        self.pc = next_pc;
+        return true;
+    }
+}

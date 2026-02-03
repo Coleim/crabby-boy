@@ -1,25 +1,44 @@
 mod cpu;
-mod header;
-mod mappings;
 
-use std::default;
-
-use cpu::CPU;
-use header::CartdrigeHeader;
+use crate::cpu::bus::Bus;
+use crate::cpu::cpu::CPU;
+use crate::cpu::header::CartdrigeHeader;
 
 fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
-    let file_path = "./cpu_instrs.gb";
-    let mut mem: Vec<u8> = std::fs::read(file_path).unwrap();
-    let header: CartdrigeHeader = CartdrigeHeader::new(&mem);
+    // let file_path = "./cpu_instrs.gb";
+    let file_path = "./01-special.gb";
+    // let file_path = "./02-interrupts.gb";
+    // Init Mem
+    let rom_data: Vec<u8> = std::fs::read(file_path).unwrap();
+    println!("ROM size: {} bytes", rom_data.len());
+    let mut bus: Bus = Bus::new(rom_data);
+    let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());
     header.print();
-
     header.is_valid()?;
-
     // create cpu
     let mut cpu: CPU = CPU::new();
 
-    while (cpu.execute(&mut mem)) {}
+    for addr in 0x0200..=0x0215u16 {
+        println!("ROM[0x{:04X}] = 0x{:02X}", addr, bus.read(addr));
+    }
+
+    loop {
+        if cpu.stopped {
+            println!("CPU STOPPED. Waiting interrupts");
+            // CPU does nothing until an interrupt or button press wakes it
+            // check_interrupts(&mut cpu);
+            continue;
+        }
+        if cpu.halt {
+            break; // for emulator convenience
+        }
+
+        if !cpu.execute(&mut bus) {
+            break;
+        }
+        // check_serial(&mut mem);
+    }
 
     Ok(())
 }
