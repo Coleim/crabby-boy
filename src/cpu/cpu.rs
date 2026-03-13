@@ -1,5 +1,3 @@
-use std::num::ParseFloatError;
-
 use crate::Bus;
 
 pub struct CPU {
@@ -15,8 +13,8 @@ pub struct CPU {
     pub sp: u16,
     pub stopped: bool,
     pub halt: bool,
-    pub ime: bool,
-    // F = Z,N,H,C
+    pub ime: bool, // DI
+                   // F = Z,N,H,C
 }
 
 impl CPU {
@@ -38,7 +36,49 @@ impl CPU {
         }
     }
 
-    fn read16bytes(&self, bus: &mut Bus, addr: u16) -> u16 {
+    fn set_z(&mut self, val: bool) {
+        if val {
+            self.f |= 0x80;
+        } else {
+            self.f &= !0x80;
+        }
+    }
+    fn set_n(&mut self, val: bool) {
+        if val {
+            self.f |= 0x40;
+        } else {
+            self.f &= !0x40;
+        }
+    }
+    fn set_h(&mut self, val: bool) {
+        if val {
+            self.f |= 0x20;
+        } else {
+            self.f &= !0x20;
+        }
+    }
+    fn set_c(&mut self, val: bool) {
+        if val {
+            self.f |= 0x10;
+        } else {
+            self.f &= !0x10;
+        }
+    }
+
+    fn get_z(&self) -> bool {
+        self.f & 0x80 != 0
+    }
+    fn get_n(&self) -> bool {
+        self.f & 0x40 != 0
+    }
+    fn get_h(&self) -> bool {
+        self.f & 0x20 != 0
+    }
+    fn get_c(&self) -> bool {
+        self.f & 0x10 != 0
+    }
+
+    fn read16bytes(&self, bus: &Bus, addr: u16) -> u16 {
         let low = bus.read(addr) as u16;
         let high = bus.read(addr.wrapping_add(1)) as u16;
         (high << 8) | low
@@ -130,63 +170,60 @@ impl CPU {
         stack_val
     }
 
-    fn load_to(&mut self, bus: &mut Bus, addr: u16, setter: fn(&mut Self, u16)) -> u16 {
+    fn load_16_to(&mut self, bus: &mut Bus, addr: u16, setter: fn(&mut Self, u16)) -> u16 {
         let n16 = self.read16bytes(bus, addr);
         setter(self, n16);
         addr.wrapping_add(2)
     }
 
     fn or(&mut self, reg: u8) {
-        self.f = 0;
         self.a = self.a | reg;
-        if self.a == 0 {
-            self.f |= 0x80;
-        }
+        self.set_z(self.a == 0);
+        self.set_n(false);
+        self.set_h(false);
+        self.set_c(false);
     }
 
-    fn increment(val: &mut u8, flag: &mut u8) {
-        *flag &= 0xDF; // Clear H flag (0xDF = 1101 1111)
-        // Check if lower nibble is 0xF before incrementing
-        if (*val & 0x0F) == 0x0F {
-            *flag |= 0x20;
-        }
-
-        *val = val.wrapping_add(1);
-
-        // Set Z flag if result is zero
-        if *val == 0 {
-            *flag |= 0x80; // Set Z flag
-        } else {
-            *flag &= !0x80; // Clear Z flag
-        }
-
-        *flag &= !0x40; // Clear N flag (always 0 for INC)
+    fn increment(&mut self, val: u8) -> u8 {
+        let h = (val & 0x0F) == 0x0F;
+        let result = val.wrapping_add(1);
+        self.set_z(result == 0);
+        self.set_n(false);
+        self.set_h(h);
+        result
     }
 
-    fn decrement(val: &mut u8, flag: &mut u8) {
-        // Z 1 H -
+    fn decrement(&mut self, val: u8) -> u8 {
+        let h = (val & 0x0F) == 0x00;
+        let result = val.wrapping_sub(1);
+        self.set_z(result == 0);
+        self.set_n(true);
+        self.set_h(h);
+        result
+    }
 
-        *flag &= 0xDF; // Clear H flag (0xDF = 1101 1111)
-        if (*val & 0x0F) == 0x00 {
-            *flag |= 0x20;
+    fn jump_relative_if(&self, bus: &Bus, addr: u16, condition: bool) -> u16 {
+        let e8 = bus.read(addr) as i8;
+        let mut new_addr = addr.wrapping_add(1);
+        if condition {
+            new_addr = new_addr.wrapping_add_signed(e8 as i16);
         }
+        new_addr
+    }
 
-        *val = val.wrapping_sub(1);
-        // Set Z flag if result is zero
-        if *val == 0 {
-            *flag |= 0x80; // Set Z flag
-        } else {
-            *flag &= !0x80; // Clear Z flag
+    fn jump_if(&self, bus: &Bus, addr: u16, condition: bool) -> u16 {
+        // JP a16 3  16 - - - -
+        let a16 = self.read16bytes(bus, addr);
+        let mut new_addr = addr.wrapping_add(2);
+        if condition {
+            new_addr = a16;
         }
-
-        *flag |= 0x40; // |0100 0000 = bit 6 forced to 1
+        new_addr
     }
 
     // pub fn execute(&mut self, bus: &mut Bus) -> bool {
     pub fn execute(&mut self, bus: &mut Bus) -> bool {
         let opcode = bus.read(self.pc);
-
-        // println!("Parsing OP CODE: 0x{:02X}", opcode);
         println!(
             "PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
             self.pc, opcode, self.sp
@@ -195,9 +232,7 @@ impl CPU {
         match opcode {
             0x00 => {}                   // NOP 1  4
             0x10 => self.stopped = true, // STOP n8 2  4
-            0x01 => {
-                next_pc = self.load_to(bus, next_pc, Self::set_bc);
-            }
+            0x01 => next_pc = self.load_16_to(bus, next_pc, Self::set_bc),
 
             0x02 => bus.write(self.get_bc(), self.a),
             0x12 => bus.write(self.get_de(), self.a),
@@ -211,45 +246,46 @@ impl CPU {
                 bus.write(hl, self.a);
                 self.set_hl(hl.wrapping_sub(1));
             }
+
             // INC
             0x03 => self.set_bc(self.get_bc().wrapping_add(1)), // INC BC 1  8
             0x13 => self.set_de(self.get_de().wrapping_add(1)), // INC DE 1 8
             0x23 => self.set_hl(self.get_hl().wrapping_add(1)), // INC HL 1  8
             0x33 => self.sp = self.sp.wrapping_add(1),          // INC SP 1  8
-            0x04 => CPU::increment(&mut self.b, &mut self.f),   // INC B 1  4 Z 0 H -
-            0x14 => CPU::increment(&mut self.d, &mut self.f),   // INC D 1  4 Z 0 H -
-            0x24 => CPU::increment(&mut self.h, &mut self.f),   // INC H 1  4 Z 0 H -
+            0x04 => self.b = self.increment(self.b),            // INC B 1  4 Z 0 H -
+            0x14 => self.d = self.increment(self.d),            // INC D 1  4 Z 0 H -
+            0x24 => self.h = self.increment(self.h),            // INC D 1  4 Z 0 H -
             0x34 => {
                 // INC [HL] 1  12 Z 0 H -
                 let mut val = bus.read(self.get_hl());
-                CPU::increment(&mut val, &mut self.f);
+                val = self.increment(val);
                 bus.write(self.get_hl(), val);
             }
-            0x0C => CPU::increment(&mut self.c, &mut self.f), // INC C 1  4 Z 0 H -
-            0x1C => CPU::increment(&mut self.e, &mut self.f), // INC E 1  4
-            0x2C => CPU::increment(&mut self.l, &mut self.f), // INC L 1  4
-            0x3C => CPU::increment(&mut self.a, &mut self.f), // INC A 1  4
+            0x0C => self.c = self.increment(self.c), // INC C 1  4 Z 0 H -
+            0x1C => self.e = self.increment(self.e), // INC E 1  4
+            0x2C => self.l = self.increment(self.l), // INC L 1  4
+            0x3C => self.a = self.increment(self.a), // INC A 1  4
 
             // DEC
-            0x05 => CPU::decrement(&mut self.b, &mut self.f),
-            0x15 => CPU::decrement(&mut self.d, &mut self.f),
-            0x25 => CPU::decrement(&mut self.h, &mut self.f),
+            0x05 => self.b = self.decrement(self.b),
+            0x15 => self.d = self.decrement(self.d),
+            0x25 => self.h = self.decrement(self.h),
             0x35 => {
                 // DEC [HL] 1  12 Z 1 H -
                 let mut val = bus.read(self.get_hl());
-                CPU::decrement(&mut val, &mut self.f);
+                val = self.decrement(val);
                 bus.write(self.get_hl(), val);
             }
 
-            0x0B => self.set_bc(self.get_bc().wrapping_sub(1)), // INC BC 1  8
-            0x1B => self.set_de(self.get_de().wrapping_sub(1)), // INC DE 1 8
-            0x2B => self.set_hl(self.get_hl().wrapping_sub(1)), // INC HL 1  8
-            0x3B => self.sp = self.sp.wrapping_sub(1),          // INC SP 1  8
+            0x0B => self.set_bc(self.get_bc().wrapping_sub(1)),
+            0x1B => self.set_de(self.get_de().wrapping_sub(1)),
+            0x2B => self.set_hl(self.get_hl().wrapping_sub(1)),
+            0x3B => self.sp = self.sp.wrapping_sub(1),
 
-            0x0D => CPU::decrement(&mut self.c, &mut self.f),
-            0x1D => CPU::decrement(&mut self.e, &mut self.f),
-            0x2D => CPU::decrement(&mut self.l, &mut self.f),
-            0x3D => CPU::decrement(&mut self.a, &mut self.f),
+            0x0D => self.c = self.decrement(self.c),
+            0x1D => self.e = self.decrement(self.e),
+            0x2D => self.l = self.decrement(self.l),
+            0x3D => self.a = self.decrement(self.a),
 
             0x0E => {
                 let n8 = bus.read(next_pc);
@@ -258,14 +294,13 @@ impl CPU {
             }
             0x3E => {
                 // Load n8 into A
-                let val: u8 = bus.read(next_pc);
-                self.a = val;
+                let n8: u8 = bus.read(next_pc);
+                self.a = n8;
                 next_pc = next_pc.wrapping_add(1);
             }
-
             0x21 => {
                 // load n16 into HL
-                next_pc = self.load_to(bus, next_pc, Self::set_hl);
+                next_pc = self.load_16_to(bus, next_pc, Self::set_hl);
             }
             0x2A => {
                 let hl: u16 = self.get_hl();
@@ -274,10 +309,10 @@ impl CPU {
             }
 
             0x11 => {
-                next_pc = self.load_to(bus, next_pc, Self::set_de);
+                next_pc = self.load_16_to(bus, next_pc, Self::set_de);
             }
             0x31 => {
-                next_pc = self.load_to(bus, next_pc, |this, val| this.sp = val);
+                next_pc = self.load_16_to(bus, next_pc, |this, val| this.sp = val);
             }
 
             0x40 => {}               //self.b = self.b, // LD B, B 1  4
@@ -352,65 +387,42 @@ impl CPU {
             0x7E => self.a = bus.read(self.get_hl()),
             0x7F => {} // self.a = self.a,
 
-            0x20 => {
-                // JR NZ, e8 2  12/8
-                let e8 = bus.read(next_pc) as i8;
-                next_pc = next_pc.wrapping_add(1);
-                if (self.f & 0x80) == 0 {
-                    next_pc = next_pc.wrapping_add_signed(e8 as i16)
-                }
-            }
-            0x18 => {
-                let e8 = bus.read(next_pc) as i8 as u16;
-                next_pc = next_pc.wrapping_add(1).wrapping_add(e8);
-            }
+            // Jumps relative
+            0x18 => next_pc = self.jump_relative_if(bus, next_pc, true),
+            0x20 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_z()),
+            0x30 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_c()),
+            0x28 => next_pc = self.jump_relative_if(bus, next_pc, self.get_z()),
+            0x38 => next_pc = self.jump_relative_if(bus, next_pc, self.get_c()),
 
-            0xC3 => {
-                let addr = self.read16bytes(bus, next_pc);
-                println!("0xC3: {:2x} ", addr);
-                next_pc = addr;
-            }
+            // Jump
+            0xC3 => next_pc = self.jump_if(bus, next_pc, true),
+            0xC2 => next_pc = self.jump_if(bus, next_pc, !self.get_z()),
+            0xD2 => next_pc = self.jump_if(bus, next_pc, !self.get_c()),
+            0xCA => next_pc = self.jump_if(bus, next_pc, self.get_z()),
+            0xDA => next_pc = self.jump_if(bus, next_pc, self.get_c()),
+
             0xEA => {
                 let addr = self.read16bytes(bus, next_pc);
                 bus.write(addr, self.a);
                 next_pc = next_pc.wrapping_add(2);
             }
-            0xC1 => self.pop_bc(bus),
-            0xD1 => self.pop_de(bus),
-            0xE1 => self.pop_hl(bus),
-            0xF1 => self.pop_af(bus),
+
             0xF3 => self.ime = false,
+            // 0xFB => self.ime = true, // TODO: On delay l'instruction
             0xD6 => {
                 // Substract n8 to A // A = A - n8
                 let val: u8 = bus.read(next_pc);
                 let a = self.a;
                 self.a = a.wrapping_sub(val);
-                self.f = 0; // 0000 0000
-                if self.a == 0 {
-                    self.f |= 0x80;
-                } // 0000 0000 | 1000 0000
-                self.f |= 0x40;
 
-                // H = did borrow happen from bit 4?
-                // H flag (half borrow)
-                if (a & 0xF) < (val & 0xF) {
-                    self.f |= 0x20;
-                }
+                self.set_z(self.a == 0);
+                self.set_n(true);
+                self.set_h((a & 0xF) < (val & 0xF));
+                self.set_c(a < val);
 
-                // C = did borrow happen from bit 8?
-                // C flag (full borrow)
-                if a < val {
-                    self.f |= 0x10;
-                }
                 next_pc = next_pc.wrapping_add(1);
             }
-            0xE0 => {
-                // Load A into bus[a8]
-                let a8 = bus.read(next_pc) as u16;
-                let addr = 0xFF00 | a8;
-                bus.write(addr, self.a);
-                next_pc = next_pc.wrapping_add(1);
-            }
+
             0xCD => {
                 // function call at addr a16
                 let ret = next_pc + 2; // Adresse de retour
@@ -425,6 +437,12 @@ impl CPU {
                 next_pc = self.read16bytes(bus, self.sp);
                 self.sp = self.sp.wrapping_add(2);
             }
+
+            0xC1 => self.pop_bc(bus),
+            0xD1 => self.pop_de(bus),
+            0xE1 => self.pop_hl(bus),
+            0xF1 => self.pop_af(bus),
+
             0xC5 => self.push_bc(bus),
             0xD5 => self.push_de(bus),
             0xE5 => self.push_hl(bus),
@@ -438,6 +456,39 @@ impl CPU {
             0xB5 => self.or(self.l),
             0xB6 => self.or(bus.read(self.get_hl())),
             0xB7 => self.or(self.a),
+
+            // Load High
+            0xE0 => {
+                let a8 = bus.read(next_pc) as u16;
+                let dest_addr = 0xFF00 | a8;
+                bus.write(dest_addr, self.a);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0xF0 => {
+                let a8 = bus.read(next_pc) as u16;
+                let src_addr = 0xFF00 | a8;
+                self.a = bus.read(src_addr);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0xE2 => {
+                let src_addr = 0xFF00 | self.c as u16;
+                bus.write(src_addr, self.a);
+            }
+            0xF2 => {
+                let src_addr = 0xFF00 | self.c as u16;
+                self.a = bus.read(src_addr);
+            }
+
+            0xFE => {
+                println!("CP A, n8 2  8 Z 1 H C");
+                let n8 = bus.read(next_pc);
+                next_pc = next_pc.wrapping_add(1);
+                // subtracts the value n8 from A
+                self.set_z(self.a.wrapping_sub(n8) == 0);
+                self.set_n(true);
+                self.set_h((self.a & 0xF) < (n8 & 0xF));
+                self.set_c(self.a < n8);
+            }
             _ => {
                 println!(
                     "Unimplemented opcode: 0x{:02X} at PC: 0x{:04X}",

@@ -1,4 +1,4 @@
-use crate::cpu::serial::Serial;
+use crate::cpu::ioregisters::IORegisters;
 
 // Start	End	Description	Notes
 // 0000	3FFF	16 KiB ROM bank 00	From cartridge, usually a fixed bank
@@ -16,9 +16,11 @@ use crate::cpu::serial::Serial;
 pub struct Bus {
     rom: Vec<u8>, // full ROM, any size
     vram: [u8; 0x2000],
+    eram: [u8; 0x2000],
     wram: [u8; 0x2000],
     oam: [u8; 0x2000],
-    serial: Serial,
+    io: IORegisters,
+    // serial: Serial,
     hram: [u8; 0x2000],
     ie: u8,
 }
@@ -28,9 +30,10 @@ impl Bus {
         Bus {
             rom: rom_data,
             vram: [0; 0x2000],
+            eram: [0; 0x2000],
             wram: [0; 0x2000],
             oam: [0; 0x2000],
-            serial: Serial::new(),
+            io: IORegisters::new(),
             hram: [0; 0x2000],
             ie: 0,
         }
@@ -43,6 +46,7 @@ impl Bus {
             0x0000..=0x3FFF => self.rom[addr as usize], // Banking 0
             0x4000..=0x7FFF => self.rom[addr as usize], // For now no banking // Banking 1
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
+            0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             0xE000..=0xFDFF => {
                 std::panic::panic_any("Not Usable	Nintendo says use of this area is prohibited.");
@@ -52,12 +56,11 @@ impl Bus {
                 std::panic::panic_any("Not Usable	Nintendo says use of this area is prohibited.")
             }
 
-            // FF00	FF7F	I/O Registers // TODO
-            0xFF01..=0xFF02 => self.serial.read(addr),
+            0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
             0xFFFF => self.ie,
             _ => {
-                println!("[BUS] Not mapped addressed {}", addr);
+                println!("[BUS] Not mapped addressed {:02X}", addr);
                 0
             }
         }
@@ -81,17 +84,15 @@ impl Bus {
         match addr {
             0x0000..=0x7FFF => std::panic::panic_any("Cannot write in ROM"), // ROM is read only
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
-            0xC000..=0xDFFF => {
-                println!("WRAM write: 0x{:04X} = 0x{:02X}", addr, val);
-                self.wram[(addr - 0xC000) as usize] = val;
-            }
+            0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
+            0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,
-            0xFF01..=0xFF02 => self.serial.write(addr, val),
+            0xFF01..=0xFF02 => self.io.write(addr, val),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = val,
             0xFFFF => self.ie = val,
             _ => {
-                println!("write not implemented  !!!")
+                println!("[BUS] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
             }
         }
     }
