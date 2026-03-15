@@ -176,12 +176,35 @@ impl CPU {
         addr.wrapping_add(2)
     }
 
-    fn or(&mut self, reg: u8) {
-        self.a = self.a | reg;
+    fn and(&mut self, val: u8) {
+        self.a = self.a & val;
+        self.set_z(self.a == 0);
+        self.set_n(false);
+        self.set_h(true);
+        self.set_c(false);
+    }
+
+    fn xor(&mut self, val: u8) {
+        self.a = self.a ^ val;
         self.set_z(self.a == 0);
         self.set_n(false);
         self.set_h(false);
         self.set_c(false);
+    }
+
+    fn or(&mut self, val: u8) {
+        self.a = self.a | val;
+        self.set_z(self.a == 0);
+        self.set_n(false);
+        self.set_h(false);
+        self.set_c(false);
+    }
+
+    fn cp(&mut self, val: u8) {
+        self.set_z(self.a.wrapping_sub(val) == 0);
+        self.set_n(true);
+        self.set_h((self.a & 0xF) < (val & 0xF));
+        self.set_c(self.a < val);
     }
 
     fn increment(&mut self, val: u8) -> u8 {
@@ -448,6 +471,24 @@ impl CPU {
             0xE5 => self.push_hl(bus),
             0xF5 => self.push_af(bus),
 
+            0xA0 => self.and(self.b),
+            0xA1 => self.and(self.c),
+            0xA2 => self.and(self.d),
+            0xA3 => self.and(self.e),
+            0xA4 => self.and(self.h),
+            0xA5 => self.and(self.l),
+            0xA6 => self.and(bus.read(self.get_hl())),
+            0xA7 => self.and(self.a),
+
+            0xA8 => self.xor(self.b),
+            0xA9 => self.xor(self.c),
+            0xAA => self.xor(self.d),
+            0xAB => self.xor(self.e),
+            0xAC => self.xor(self.h),
+            0xAD => self.xor(self.l),
+            0xAE => self.xor(bus.read(self.get_hl())),
+            0xAF => self.xor(self.a),
+
             0xB0 => self.or(self.b),
             0xB1 => self.or(self.c),
             0xB2 => self.or(self.d),
@@ -479,16 +520,22 @@ impl CPU {
                 self.a = bus.read(src_addr);
             }
 
+            // CP
+            0xB8 => self.cp(self.b),
+            0xB9 => self.cp(self.c),
+            0xBA => self.cp(self.d),
+            0xBB => self.cp(self.e),
+            0xBC => self.cp(self.h),
+            0xBD => self.cp(self.l),
+            0xBE => self.cp(bus.read(self.get_hl())),
+            0xBF => self.cp(self.a),
             0xFE => {
                 println!("CP A, n8 2  8 Z 1 H C");
                 let n8 = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
-                // subtracts the value n8 from A
-                self.set_z(self.a.wrapping_sub(n8) == 0);
-                self.set_n(true);
-                self.set_h((self.a & 0xF) < (n8 & 0xF));
-                self.set_c(self.a < n8);
+                self.cp(n8);
             }
+
             _ => {
                 println!(
                     "Unimplemented opcode: 0x{:02X} at PC: 0x{:04X}",

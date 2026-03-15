@@ -14,6 +14,8 @@ impl IORegisters {
         if matches!(addr, 0xFF01..=0xFF02) {
             self.serial.read(addr)
         } else {
+            println!("[IOREG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
+            std::panic::panic_any("[IOREG] READ NOT IMPLEMENTED");
             0x00
         }
     }
@@ -22,6 +24,8 @@ impl IORegisters {
         if matches!(addr, 0xFF01..=0xFF02) {
             self.serial.write(addr, val);
         } else {
+            println!("[IOREG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
+            std::panic::panic_any("[IOREG] WRITE NOT IMPLEMENTED");
         }
     }
 }

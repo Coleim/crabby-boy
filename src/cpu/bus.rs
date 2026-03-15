@@ -88,11 +88,12 @@ impl Bus {
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,
-            0xFF01..=0xFF02 => self.io.write(addr, val),
+            0xFF00..=0xFF7F => self.io.write(addr, val),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = val,
             0xFFFF => self.ie = val,
             _ => {
                 println!("[BUS] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
+                std::panic::panic_any("[BUS] WRITE NOT IMPLEMENTED");
             }
         }
     }
