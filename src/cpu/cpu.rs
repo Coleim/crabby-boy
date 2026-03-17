@@ -244,6 +244,18 @@ impl CPU {
         new_addr
     }
 
+    fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> u16 {
+        let ret = addr.wrapping_add(2); // Adresse de retour
+        if condition {
+            let n16 = self.read16bytes(bus, addr); // Adresse cible (du CALL)
+            self.sp = self.sp.wrapping_sub(2); // Décrémenter SP pour empiler sur la stack
+            self.write16bytes(bus, self.sp, ret); // Ecrire l'adresse de retour sur la stack
+            n16 // Aller a l'adresse du CALL
+        } else {
+            ret
+        }
+    }
+
     // pub fn execute(&mut self, bus: &mut Bus) -> bool {
     pub fn execute(&mut self, bus: &mut Bus) -> bool {
         let opcode = bus.read(self.pc);
@@ -256,6 +268,9 @@ impl CPU {
             0x00 => {}                   // NOP 1  4
             0x10 => self.stopped = true, // STOP n8 2  4
             0x01 => next_pc = self.load_16_to(bus, next_pc, Self::set_bc),
+            0x11 => next_pc = self.load_16_to(bus, next_pc, Self::set_de),
+            0x21 => next_pc = self.load_16_to(bus, next_pc, Self::set_hl),
+            0x31 => next_pc = self.load_16_to(bus, next_pc, |this, val| this.sp = val),
 
             0x02 => bus.write(self.get_bc(), self.a),
             0x12 => bus.write(self.get_de(), self.a),
@@ -271,13 +286,14 @@ impl CPU {
             }
 
             // INC
-            0x03 => self.set_bc(self.get_bc().wrapping_add(1)), // INC BC 1  8
-            0x13 => self.set_de(self.get_de().wrapping_add(1)), // INC DE 1 8
-            0x23 => self.set_hl(self.get_hl().wrapping_add(1)), // INC HL 1  8
-            0x33 => self.sp = self.sp.wrapping_add(1),          // INC SP 1  8
-            0x04 => self.b = self.increment(self.b),            // INC B 1  4 Z 0 H -
-            0x14 => self.d = self.increment(self.d),            // INC D 1  4 Z 0 H -
-            0x24 => self.h = self.increment(self.h),            // INC D 1  4 Z 0 H -
+            0x03 => self.set_bc(self.get_bc().wrapping_add(1)),
+            0x13 => self.set_de(self.get_de().wrapping_add(1)),
+            0x23 => self.set_hl(self.get_hl().wrapping_add(1)),
+            0x33 => self.sp = self.sp.wrapping_add(1), // INC SP 1  8
+
+            0x04 => self.b = self.increment(self.b), // INC B 1  4 Z 0 H -
+            0x14 => self.d = self.increment(self.d), // INC D 1  4 Z 0 H -
+            0x24 => self.h = self.increment(self.h), // INC D 1  4 Z 0 H -
             0x34 => {
                 // INC [HL] 1  12 Z 0 H -
                 let mut val = bus.read(self.get_hl());
@@ -310,32 +326,63 @@ impl CPU {
             0x2D => self.l = self.decrement(self.l),
             0x3D => self.a = self.decrement(self.a),
 
+            // LD
+            0x06 => {
+                self.b = bus.read(next_pc);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0x16 => {
+                self.d = bus.read(next_pc);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0x26 => {
+                self.h = bus.read(next_pc);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0x36 => {
+                bus.write(self.get_hl(), bus.read(next_pc));
+                next_pc = next_pc.wrapping_add(1);
+            }
+
             0x0E => {
-                let n8 = bus.read(next_pc);
-                self.c = n8;
+                self.c = bus.read(next_pc);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0x1E => {
+                self.e = bus.read(next_pc);
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0x2E => {
+                self.l = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
             }
             0x3E => {
-                // Load n8 into A
-                let n8: u8 = bus.read(next_pc);
-                self.a = n8;
+                self.a = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
             }
-            0x21 => {
-                // load n16 into HL
-                next_pc = self.load_16_to(bus, next_pc, Self::set_hl);
+
+            0xEA => {
+                let addr = self.read16bytes(bus, next_pc);
+                bus.write(addr, self.a);
+                next_pc = next_pc.wrapping_add(2);
             }
+            0xFA => {
+                let addr = self.read16bytes(bus, next_pc);
+                self.a = bus.read(addr);
+                next_pc = next_pc.wrapping_add(2);
+            }
+
+            0x0A => self.a = bus.read(self.get_bc()),
+            0x1A => self.a = bus.read(self.get_de()),
             0x2A => {
                 let hl: u16 = self.get_hl();
                 self.a = bus.read(hl);
                 self.set_hl(hl.wrapping_add(1));
             }
-
-            0x11 => {
-                next_pc = self.load_16_to(bus, next_pc, Self::set_de);
-            }
-            0x31 => {
-                next_pc = self.load_16_to(bus, next_pc, |this, val| this.sp = val);
+            0x3A => {
+                let hl: u16 = self.get_hl();
+                self.a = bus.read(hl);
+                self.set_hl(hl.wrapping_sub(1));
             }
 
             0x40 => {}               //self.b = self.b, // LD B, B 1  4
@@ -424,14 +471,8 @@ impl CPU {
             0xCA => next_pc = self.jump_if(bus, next_pc, self.get_z()),
             0xDA => next_pc = self.jump_if(bus, next_pc, self.get_c()),
 
-            0xEA => {
-                let addr = self.read16bytes(bus, next_pc);
-                bus.write(addr, self.a);
-                next_pc = next_pc.wrapping_add(2);
-            }
-
             0xF3 => self.ime = false,
-            // 0xFB => self.ime = true, // TODO: On delay l'instruction
+            // ixFB => self.ime = true, // TODO: On delay l'instruction
             0xD6 => {
                 // Substract n8 to A // A = A - n8
                 let val: u8 = bus.read(next_pc);
@@ -446,15 +487,13 @@ impl CPU {
                 next_pc = next_pc.wrapping_add(1);
             }
 
-            0xCD => {
-                // function call at addr a16
-                let ret = next_pc + 2; // Adresse de retour
-                let n16 = self.read16bytes(bus, next_pc); // Adresse cible (du CALL)
-                self.sp -= 2; // Décrémenter SP pour empiler sur la stack
-                // Ecrire l'adresse de retour sur la stack
-                self.write16bytes(bus, self.sp, ret);
-                next_pc = n16; // Aller a l'adresse du CALL
-            }
+            // CALL
+            0xC4 => next_pc = self.call_if(!self.get_z(), bus, next_pc),
+            0xD4 => next_pc = self.call_if(!self.get_c(), bus, next_pc),
+            0xCC => next_pc = self.call_if(self.get_z(), bus, next_pc),
+            0xDC => next_pc = self.call_if(self.get_c(), bus, next_pc),
+            0xCD => next_pc = self.call_if(true, bus, next_pc),
+            // RET
             0xC9 => {
                 // return from fonction call
                 next_pc = self.read16bytes(bus, self.sp);
@@ -479,6 +518,10 @@ impl CPU {
             0xA5 => self.and(self.l),
             0xA6 => self.and(bus.read(self.get_hl())),
             0xA7 => self.and(self.a),
+            0xE6 => {
+                self.and(bus.read(next_pc));
+                next_pc = next_pc.wrapping_add(1);
+            }
 
             0xA8 => self.xor(self.b),
             0xA9 => self.xor(self.c),
@@ -488,6 +531,10 @@ impl CPU {
             0xAD => self.xor(self.l),
             0xAE => self.xor(bus.read(self.get_hl())),
             0xAF => self.xor(self.a),
+            0xEE => {
+                self.xor(bus.read(next_pc));
+                next_pc = next_pc.wrapping_add(1);
+            }
 
             0xB0 => self.or(self.b),
             0xB1 => self.or(self.c),
@@ -497,6 +544,10 @@ impl CPU {
             0xB5 => self.or(self.l),
             0xB6 => self.or(bus.read(self.get_hl())),
             0xB7 => self.or(self.a),
+            0xF6 => {
+                self.or(bus.read(next_pc));
+                next_pc = next_pc.wrapping_add(1);
+            }
 
             // Load High
             0xE0 => {
