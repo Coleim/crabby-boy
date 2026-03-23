@@ -256,6 +256,42 @@ impl CPU {
         }
     }
 
+    fn return_if(&mut self, condition: bool, bus: &mut Bus, current_pc: u16) -> u16 {
+        if condition {
+            // return from fonction call
+            let n16 = self.read16bytes(bus, self.sp);
+            self.sp = self.sp.wrapping_add(2);
+            n16
+        } else {
+            current_pc
+        }
+    }
+
+    fn add_to_a(&mut self, val: u8, carry: u8) {
+        self.set_n(false);
+        self.set_h((self.a & 0xF) + (val & 0xF) + (carry & 0xF) > 0xF);
+        self.set_c((self.a as u16) + (val as u16) + (carry as u16) > 0xFF);
+        self.a = self.a.wrapping_add(val).wrapping_add(carry);
+        self.set_z(self.a == 0);
+    }
+
+    fn add_16b_registers(&mut self, reg1: u16, reg2: u16, setter: fn(&mut Self, u16)) {
+        self.set_n(false);
+        self.set_h((reg1 & 0xFFF) + (reg2 & 0xFFF) > 0xFFF);
+        self.set_c((reg1 as u32) + (reg2 as u32) > 0xFFFF);
+        setter(self, reg1.wrapping_add(reg2));
+    }
+
+    fn sub_from_a(&mut self, val: u8, carry: u8) {
+        self.set_n(true);
+        // SUB — half-carry if lower nibble would borrow
+        self.set_h((self.a & 0xF) < (val & 0xF) + carry);
+        // SUB — carry if it would borrow
+        self.set_c((self.a as u16) < (val as u16) + (carry as u16));
+        self.a = self.a.wrapping_sub(val).wrapping_sub(carry);
+        self.set_z(self.a == 0);
+    }
+
     // pub fn execute(&mut self, bus: &mut Bus) -> bool {
     pub fn execute(&mut self, bus: &mut Bus) -> bool {
         let opcode = bus.read(self.pc);
@@ -470,22 +506,10 @@ impl CPU {
             0xD2 => next_pc = self.jump_if(bus, next_pc, !self.get_c()),
             0xCA => next_pc = self.jump_if(bus, next_pc, self.get_z()),
             0xDA => next_pc = self.jump_if(bus, next_pc, self.get_c()),
+            0xE9 => next_pc = self.get_hl(),
 
             0xF3 => self.ime = false,
             // ixFB => self.ime = true, // TODO: On delay l'instruction
-            0xD6 => {
-                // Substract n8 to A // A = A - n8
-                let val: u8 = bus.read(next_pc);
-                let a = self.a;
-                self.a = a.wrapping_sub(val);
-
-                self.set_z(self.a == 0);
-                self.set_n(true);
-                self.set_h((a & 0xF) < (val & 0xF));
-                self.set_c(a < val);
-
-                next_pc = next_pc.wrapping_add(1);
-            }
 
             // CALL
             0xC4 => next_pc = self.call_if(!self.get_z(), bus, next_pc),
@@ -493,12 +517,13 @@ impl CPU {
             0xCC => next_pc = self.call_if(self.get_z(), bus, next_pc),
             0xDC => next_pc = self.call_if(self.get_c(), bus, next_pc),
             0xCD => next_pc = self.call_if(true, bus, next_pc),
+
             // RET
-            0xC9 => {
-                // return from fonction call
-                next_pc = self.read16bytes(bus, self.sp);
-                self.sp = self.sp.wrapping_add(2);
-            }
+            0xC0 => next_pc = self.return_if(!self.get_z(), bus, next_pc),
+            0xD0 => next_pc = self.return_if(!self.get_c(), bus, next_pc),
+            0xC8 => next_pc = self.return_if(self.get_z(), bus, next_pc),
+            0xD8 => next_pc = self.return_if(self.get_c(), bus, next_pc),
+            0xC9 => next_pc = self.return_if(true, bus, next_pc),
 
             0xC1 => self.pop_bc(bus),
             0xD1 => self.pop_de(bus),
@@ -581,11 +606,89 @@ impl CPU {
             0xBE => self.cp(bus.read(self.get_hl())),
             0xBF => self.cp(self.a),
             0xFE => {
-                println!("CP A, n8 2  8 Z 1 H C");
                 let n8 = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
                 self.cp(n8);
             }
+
+            // ADD
+            0x80 => self.add_to_a(self.b, 0),
+            0x81 => self.add_to_a(self.c, 0),
+            0x82 => self.add_to_a(self.d, 0),
+            0x83 => self.add_to_a(self.e, 0),
+            0x84 => self.add_to_a(self.h, 0),
+            0x85 => self.add_to_a(self.l, 0),
+            0x86 => self.add_to_a(bus.read(self.get_hl()), 0),
+            0x87 => self.add_to_a(self.a, 0),
+            0xC6 => {
+                let n8 = bus.read(next_pc);
+                self.add_to_a(n8, 0);
+                next_pc = next_pc.wrapping_add(1);
+            }
+
+            0x09 => self.add_16b_registers(self.get_hl(), self.get_bc(), Self::set_hl),
+            0x19 => self.add_16b_registers(self.get_hl(), self.get_de(), Self::set_hl),
+            0x29 => self.add_16b_registers(self.get_hl(), self.get_hl(), Self::set_hl),
+            0x39 => self.add_16b_registers(self.get_hl(), self.sp, Self::set_hl),
+
+            0xE8 => {
+                let byte = bus.read(next_pc);
+                let s8 = byte as i8;
+                let u8 = byte as u16;
+                next_pc = next_pc.wrapping_add(1);
+                self.set_z(false);
+                self.set_n(false);
+                self.set_h((self.sp & 0xF) + (u8 & 0xF) > 0xF);
+                self.set_c((self.sp & 0xFF) + (u8 & 0xFF) > 0xFF);
+                self.sp = self.sp.wrapping_add_signed(s8 as i16);
+            }
+
+            // ADC
+            0x88 => self.add_to_a(self.b, self.get_c() as u8),
+            0x89 => self.add_to_a(self.c, self.get_c() as u8),
+            0x8A => self.add_to_a(self.d, self.get_c() as u8),
+            0x8B => self.add_to_a(self.e, self.get_c() as u8),
+            0x8C => self.add_to_a(self.h, self.get_c() as u8),
+            0x8D => self.add_to_a(self.l, self.get_c() as u8),
+            0x8E => self.add_to_a(bus.read(self.get_hl()), self.get_c() as u8),
+            0x8F => self.add_to_a(self.a, self.get_c() as u8),
+            0xCE => {
+                let n8 = bus.read(next_pc);
+                self.add_to_a(n8, self.get_c() as u8);
+                next_pc = next_pc.wrapping_add(1);
+            }
+
+            //SUB
+            0x90 => self.sub_from_a(self.b, 0),
+            0x91 => self.sub_from_a(self.c, 0),
+            0x92 => self.sub_from_a(self.d, 0),
+            0x93 => self.sub_from_a(self.e, 0),
+            0x94 => self.sub_from_a(self.h, 0),
+            0x95 => self.sub_from_a(self.l, 0),
+            0x96 => self.sub_from_a(bus.read(self.get_hl()), 0),
+            0x97 => self.sub_from_a(self.a, 0),
+            0xD6 => {
+                let n8 = bus.read(next_pc);
+                self.sub_from_a(n8, 0);
+                next_pc = next_pc.wrapping_add(1);
+            }
+
+            // SBC
+            0x98 => self.sub_from_a(self.b, self.get_c() as u8),
+            0x99 => self.sub_from_a(self.c, self.get_c() as u8),
+            0x9A => self.sub_from_a(self.d, self.get_c() as u8),
+            0x9B => self.sub_from_a(self.e, self.get_c() as u8),
+            0x9C => self.sub_from_a(self.h, self.get_c() as u8),
+            0x9D => self.sub_from_a(self.l, self.get_c() as u8),
+            0x9E => self.sub_from_a(bus.read(self.get_hl()), self.get_c() as u8),
+            0x9F => self.sub_from_a(self.a, self.get_c() as u8),
+            0xD7 => {
+                let n8 = bus.read(next_pc);
+                self.sub_from_a(n8, self.get_c() as u8);
+                next_pc = next_pc.wrapping_add(1);
+            }
+
+            0xCB => return self.execute_cb(bus, next_pc),
 
             _ => {
                 println!(
@@ -595,6 +698,28 @@ impl CPU {
                 return false;
             }
         }
+        println!(" Going to addr: {:#x}", next_pc);
+        self.pc = next_pc;
+        return true;
+    }
+
+    fn execute_cb(&mut self, bus: &Bus, current_pc: u16) -> bool {
+        let opcode = bus.read(current_pc);
+        let next_pc = current_pc.wrapping_add(1);
+        println!("NEXT CB: 0xCB{:02X}", opcode);
+        match opcode {
+            0x38 => {
+                println!("SRL B 2  8 Z 0 0 C")
+            }
+            _ => {
+                println!(
+                    "Unimplemented opcode: 0xCB{:02X} at PC: 0x{:04X}",
+                    opcode, self.pc
+                );
+                return false;
+            }
+        }
+
         println!(" Going to addr: {:#x}", next_pc);
         self.pc = next_pc;
         return true;

@@ -6,8 +6,9 @@ use crate::cpu::header::CartdrigeHeader;
 
 fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
-    // let file_path = "./cpu_instrs.gb";
+    // let file_path = "./tests/cpu_instrs.gb";
     let file_path = "./tests/cpu_instrs/01-special.gb";
+    // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
     // let file_path = "./02-interrupts.gb";
     // Init Mem
     let rom_data: Vec<u8> = std::fs::read(file_path).unwrap();
