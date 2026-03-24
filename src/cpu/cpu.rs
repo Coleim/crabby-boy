@@ -292,6 +292,44 @@ impl CPU {
         self.set_z(self.a == 0);
     }
 
+    fn rotate_left(value: u8) -> u8 {
+        value << 1 | value >> 7
+    }
+    fn rotate_right(value: u8) -> u8 {
+        value >> 1 | value << 7
+    }
+
+    fn rlca(&mut self) {
+        self.set_c((self.a & 0x80) != 0);
+        self.a = CPU::rotate_left(self.a);
+        self.set_z(false);
+        self.set_n(false);
+        self.set_h(false);
+    }
+    fn rrca(&mut self) {
+        self.set_c((self.a & 0x01) != 0);
+        self.a = CPU::rotate_right(self.a);
+        self.set_z(false);
+        self.set_n(false);
+        self.set_h(false);
+    }
+    fn rra(&mut self) {
+        let old_carry = self.get_c() as u8;
+        self.set_c((self.a & 0x01) != 0);
+        self.a = self.a >> 1 | (old_carry << 7);
+        self.set_z(false);
+        self.set_n(false);
+        self.set_h(false);
+    }
+    fn rla(&mut self) {
+        let old_carry = self.get_c() as u8;
+        self.set_c((self.a & 0x80) != 0);
+        self.a = self.a << 1 | old_carry;
+        self.set_z(false);
+        self.set_n(false);
+        self.set_h(false);
+    }
+
     // pub fn execute(&mut self, bus: &mut Bus) -> bool {
     pub fn execute(&mut self, bus: &mut Bus) -> bool {
         let opcode = bus.read(self.pc);
@@ -367,6 +405,11 @@ impl CPU {
                 self.b = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
             }
+            0x08 => {
+                let a16 = self.read16bytes(bus, next_pc);
+                self.write16bytes(bus, a16, self.sp);
+                next_pc = next_pc.wrapping_add(2);
+            }
             0x16 => {
                 self.d = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
@@ -407,6 +450,18 @@ impl CPU {
                 self.a = bus.read(addr);
                 next_pc = next_pc.wrapping_add(2);
             }
+            0xF8 => {
+                self.set_z(false);
+                self.set_n(false);
+
+                let byte = bus.read(next_pc);
+                let s8 = byte as i8;
+                self.set_h((self.sp & 0xF) + (byte as u16 & 0xF) > 0xF);
+                self.set_c((self.sp & 0xFF) + (byte as u16) > 0xFF);
+                self.set_hl(self.sp.wrapping_add_signed(s8 as i16));
+                next_pc = next_pc.wrapping_add(1);
+            }
+            0xF9 => self.sp = self.get_hl(),
 
             0x0A => self.a = bus.read(self.get_bc()),
             0x1A => self.a = bus.read(self.get_de()),
@@ -689,6 +744,12 @@ impl CPU {
             }
 
             0xCB => return self.execute_cb(bus, next_pc),
+
+            // Rotate
+            0x07 => self.rlca(),
+            0x17 => self.rla(),
+            0x0F => self.rrca(),
+            0x1F => self.rra(),
 
             _ => {
                 println!(
