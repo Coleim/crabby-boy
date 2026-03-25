@@ -299,20 +299,29 @@ impl CPU {
         value >> 1 | value << 7
     }
 
-    fn rlca(&mut self) {
+    fn rlc(&mut self, reg: u8) -> u8 {
         self.set_c((self.a & 0x80) != 0);
-        self.a = CPU::rotate_left(self.a);
         self.set_z(false);
         self.set_n(false);
         self.set_h(false);
+        CPU::rotate_left(reg)
+    }
+
+    fn rlca(&mut self) {
+        self.a = self.rlc(self.a);
+    }
+
+    fn rrc(&mut self, reg: u8) -> u8 {
+        self.set_c((reg & 0x01) != 0);
+        self.set_z(false);
+        self.set_n(false);
+        self.set_h(false);
+        CPU::rotate_right(self.a)
     }
     fn rrca(&mut self) {
-        self.set_c((self.a & 0x01) != 0);
-        self.a = CPU::rotate_right(self.a);
-        self.set_z(false);
-        self.set_n(false);
-        self.set_h(false);
+        self.a = self.rrc(self.a);
     }
+
     fn rra(&mut self) {
         let old_carry = self.get_c() as u8;
         self.set_c((self.a & 0x01) != 0);
@@ -578,6 +587,7 @@ impl CPU {
             0xD0 => next_pc = self.return_if(!self.get_c(), bus, next_pc),
             0xC8 => next_pc = self.return_if(self.get_z(), bus, next_pc),
             0xD8 => next_pc = self.return_if(self.get_c(), bus, next_pc),
+            // 0xD9 => RETI
             0xC9 => next_pc = self.return_if(true, bus, next_pc),
 
             0xC1 => self.pop_bc(bus),
@@ -751,6 +761,51 @@ impl CPU {
             0x0F => self.rrca(),
             0x1F => self.rra(),
 
+            // CPL
+            0x2F => {
+                self.a = !self.a;
+                self.set_n(true);
+                self.set_h(true);
+            }
+            // CCF
+            0x3F => {
+                self.set_c(!self.get_c());
+                self.set_n(false);
+                self.set_h(false);
+            }
+            // SCF
+            0x37 => {
+                self.set_c(true);
+                self.set_n(false);
+                self.set_h(false);
+            }
+
+            0x27 => {
+                // DAA
+                // https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7#DAA
+                let mut adjustment = 0;
+                if self.get_n() {
+                    if self.get_h() {
+                        adjustment = adjustment + 0x06;
+                    }
+                    if self.get_c() {
+                        adjustment = adjustment + 0x60;
+                    }
+                    self.a = self.a.wrapping_sub(adjustment);
+                } else {
+                    if self.get_h() || (self.a & 0xF) > 0x9 {
+                        adjustment = adjustment + 0x06;
+                    }
+                    if self.get_c() || self.a > 0x99 {
+                        adjustment = adjustment + 0x60;
+                        self.set_c(true);
+                    }
+                    self.a = self.a.wrapping_add(adjustment);
+                }
+                self.set_h(false);
+                self.set_z(self.a == 0);
+            }
+
             _ => {
                 println!(
                     "Unimplemented opcode: 0x{:02X} at PC: 0x{:04X}",
@@ -769,9 +824,9 @@ impl CPU {
         let next_pc = current_pc.wrapping_add(1);
         println!("NEXT CB: 0xCB{:02X}", opcode);
         match opcode {
-            0x38 => {
-                println!("SRL B 2  8 Z 0 0 C")
-            }
+            // 0x38 => {
+            //     println!("SRL B 2  8 Z 0 0 C")
+            // }
             _ => {
                 println!(
                     "Unimplemented opcode: 0xCB{:02X} at PC: 0x{:04X}",
