@@ -22,7 +22,7 @@ impl Serial {
             0xFF02 => {
                 self.sc = val;
                 if self.sc == 0x81 {
-                    println!("{}", self.sb as char);
+                    print!("{}", self.sb as char);
                     self.sc = 0x00;
                 }
             }

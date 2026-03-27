@@ -7,10 +7,19 @@ use crate::cpu::header::CartdrigeHeader;
 fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
     // let file_path = "./tests/cpu_instrs.gb";
-    let file_path = "./tests/cpu_instrs/01-special.gb";
+    // let file_path = "./tests/cpu_instrs/01-special.gb";
+    // let file_path = "./tests/cpu_instrs/02-interrupts.gb";
     // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
-    // let file_path = "./02-interrupts.gb";
+    // let file_path = "./tests/cpu_instrs/04-op r,imm.gb";
+    // let file_path = "./tests/cpu_instrs/05-op rp.gb";
+    let file_path = "./tests/cpu_instrs/06-ld r,r.gb";
+    // let file_path = "./tests/cpu_instrs/07-jr,jp,call,ret,rst.gb";
+    // let file_path = "./tests/cpu_instrs/08-misc instrs.gb";
+    // let file_path = "./tests/cpu_instrs/09-op r,r.gb";
+    // let file_path = "./tests/cpu_instrs/10-bit ops.gb";
+    // let file_path = "./tests/cpu_instrs/11-op a,(hl).gb";
     // Init Mem
+
     let rom_data: Vec<u8> = std::fs::read(file_path).unwrap();
     println!("ROM size: {} bytes", rom_data.len());
     let mut bus: Bus = Bus::new(rom_data);
@@ -19,17 +28,12 @@ fn main() -> Result<(), String> {
     header.is_valid()?;
     // create cpu
     let mut cpu: CPU = CPU::new();
-
-    for addr in 0x0200..=0x0215u16 {
-        println!("ROM[0x{:04X}] = 0x{:02X}", addr, bus.read(addr));
-    }
-
     loop {
         if cpu.stopped {
-            println!("CPU STOPPED. Waiting interrupts");
+            // println!("CPU STOPPED. Waiting interrupts");
             // CPU does nothing until an interrupt or button press wakes it
             // check_interrupts(&mut cpu);
-            continue;
+            break;
         }
         if cpu.halt {
             break; // for emulator convenience

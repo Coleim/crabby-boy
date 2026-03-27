@@ -59,10 +59,6 @@ impl Bus {
             0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
             0xFFFF => self.ie,
-            _ => {
-                println!("[BUS] Not mapped addressed {:02X}", addr);
-                0
-            }
         }
     }
 
@@ -82,7 +78,7 @@ impl Bus {
     pub fn write(&mut self, addr: u16, val: u8) {
         //TODO: https://doc.rust-lang.org/rust-by-example/conversion/from_into.html
         match addr {
-            0x0000..=0x7FFF => std::panic::panic_any("Cannot write in ROM"), // ROM is read only
+            0x0000..=0x7FFF => {} // TODO : Implement MBC switch
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,

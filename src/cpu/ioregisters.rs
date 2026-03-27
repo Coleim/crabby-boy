@@ -24,6 +24,12 @@ impl IORegisters {
             0xFF04..=0xFF07 => self.timer_and_diviers.read(addr),
             0xFF0F => self.interrupt_flag,
             0xFF10..=0xFF26 => self.audio.read(addr),
+            0xFF40 => 0x91, // LCDC - LCD enabled, BG enabled
+            0xFF41 => 0x85, // STAT - mode 1 (VBlank)
+            0xFF42 => 0x00, // SCY
+            0xFF43 => 0x00, // SCX
+            0xFF44 => 0x90, // LY - report VBlank scanline (144)
+            0xFF47 => 0xFC, // BGP
             0xFFFF => self.interrupt_enable,
             _ => {
                 println!("[IOREG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
@@ -39,6 +45,7 @@ impl IORegisters {
             0xFF04..=0xFF07 => self.timer_and_diviers.write(addr, val),
             0xFF0F => self.interrupt_flag = val,
             0xFF10..=0xFF26 => self.audio.write(addr, val),
+            0xFF40..=0xFF4B => {} // PPU registers - silently ignore for now
             0xFFFF => self.interrupt_enable = val,
             _ => {
                 println!(

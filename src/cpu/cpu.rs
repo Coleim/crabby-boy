@@ -352,10 +352,10 @@ impl CPU {
         }
 
         let opcode: u8 = bus.read(self.pc);
-        println!(
-            "PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
-            self.pc, opcode, self.sp
-        );
+        // println!(
+        //     "PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
+        //     self.pc, opcode, self.sp
+        // );
         let mut next_pc: u16 = self.pc.wrapping_add(1);
         match opcode {
             0x00 => {}                   // NOP 1  4
@@ -518,6 +518,7 @@ impl CPU {
             0x52 => {} // self.d = self.d,
             0x53 => self.d = self.e,
             0x54 => self.d = self.h,
+            0x55 => self.d = self.l,
             0x56 => self.d = bus.read(self.get_hl()),
             0x57 => self.d = self.a,
 
@@ -835,7 +836,7 @@ impl CPU {
                 return false;
             }
         }
-        println!(" Going to addr: {:#x}", next_pc);
+        // println!(" Going to addr: {:#x}", next_pc);
         self.pc = next_pc;
         return true;
     }
@@ -918,6 +919,20 @@ impl CPU {
         self.set_z(bit == 0);
     }
 
+    fn reset_bit(&mut self, bit_index: u8, reg: u8, bus: &mut Bus) {
+        let curr_reg = self.get_register(reg, bus);
+        let bit_mask = 1 << bit_index;
+        let new_reg = curr_reg & !bit_mask;
+        self.set_register(reg, new_reg, bus);
+    }
+
+    fn set_bit(&mut self, bit_index: u8, reg: u8, bus: &mut Bus) {
+        let curr_reg = self.get_register(reg, bus);
+        let bit_mask = 1 << bit_index;
+        let new_reg = curr_reg | bit_mask;
+        self.set_register(reg, new_reg, bus);
+    }
+
     fn set_register(&mut self, reg: u8, value: u8, bus: &mut Bus) {
         match reg {
             0 => self.b = value,
@@ -939,9 +954,9 @@ impl CPU {
         let subcategory: u8 = opcode >> 3 & 0b00000111; // 1111 1000 -> 0001 1111 -> 00000111
         let operand: u8 = opcode & 0b00000111; // 0000 0111 
 
-        println!("NEXT CB: {:02X}", category);
-        println!("category: {:02X}", subcategory);
-        println!("operant {:02X}", operand);
+        // println!("category: {:02X}", category);
+        // println!("subcategory: {:02X}", subcategory);
+        // println!("operand {:02X}", operand);
 
         match category {
             0 => match subcategory {
@@ -955,16 +970,9 @@ impl CPU {
                 7 => self.srl(operand, bus),
                 _ => {}
             },
-            1 => {
-                println!("bit");
-                self.bit(subcategory, operand, bus);
-            }
-            2 => {
-                // res
-            }
-            3 => {
-                // set
-            }
+            1 => self.bit(subcategory, operand, bus),
+            2 => self.reset_bit(subcategory, operand, bus),
+            3 => self.set_bit(subcategory, operand, bus),
 
             _ => {
                 println!(
@@ -975,7 +983,7 @@ impl CPU {
             }
         }
 
-        println!(" Going to addr: {:#x}", next_pc);
+        // println!(" Going to addr: {:#x}", next_pc);
         self.pc = next_pc;
         return true;
     }
