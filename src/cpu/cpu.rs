@@ -13,8 +13,8 @@ pub struct CPU {
     pub sp: u16,
     pub stopped: bool,
     pub halt: bool,
-    pub ime: bool, // DI
-                   // F = Z,N,H,C
+    pub ime: bool,
+    pub ime_pending: bool,
 }
 
 impl CPU {
@@ -32,7 +32,8 @@ impl CPU {
             sp: 0xFFFE, // $FFFE
             stopped: false,
             halt: false,
-            ime: true,
+            ime: false,
+            ime_pending: false,
         }
     }
 
@@ -244,6 +245,12 @@ impl CPU {
         new_addr
     }
 
+    fn rst(&mut self, bus: &mut Bus, curr: u16, dest: u16) -> u16 {
+        self.sp = self.sp.wrapping_sub(2);
+        self.write16bytes(bus, self.sp, curr);
+        dest
+    }
+
     fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> u16 {
         let ret = addr.wrapping_add(2); // Adresse de retour
         if condition {
@@ -299,27 +306,20 @@ impl CPU {
         value >> 1 | value << 7
     }
 
-    fn rlc(&mut self, reg: u8) -> u8 {
+    fn rlca(&mut self) {
         self.set_c((self.a & 0x80) != 0);
         self.set_z(false);
         self.set_n(false);
         self.set_h(false);
-        CPU::rotate_left(reg)
+        self.a = CPU::rotate_left(self.a);
     }
 
-    fn rlca(&mut self) {
-        self.a = self.rlc(self.a);
-    }
-
-    fn rrc(&mut self, reg: u8) -> u8 {
-        self.set_c((reg & 0x01) != 0);
+    fn rrca(&mut self) {
+        self.set_c((self.a & 0x01) != 0);
         self.set_z(false);
         self.set_n(false);
         self.set_h(false);
-        CPU::rotate_right(self.a)
-    }
-    fn rrca(&mut self) {
-        self.a = self.rrc(self.a);
+        self.a = CPU::rotate_right(self.a);
     }
 
     fn rra(&mut self) {
@@ -341,7 +341,17 @@ impl CPU {
 
     // pub fn execute(&mut self, bus: &mut Bus) -> bool {
     pub fn execute(&mut self, bus: &mut Bus) -> bool {
-        let opcode = bus.read(self.pc);
+        if self.ime_pending {
+            self.ime = true;
+            self.ime_pending = false;
+        }
+
+        // TODO: Check for interrupts if IME is set
+        if self.ime {
+            self.ime_pending = false;
+        }
+
+        let opcode: u8 = bus.read(self.pc);
         println!(
             "PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
             self.pc, opcode, self.sp
@@ -573,8 +583,7 @@ impl CPU {
             0xE9 => next_pc = self.get_hl(),
 
             0xF3 => self.ime = false,
-            // ixFB => self.ime = true, // TODO: On delay l'instruction
-
+            0xFB => self.ime_pending = true,
             // CALL
             0xC4 => next_pc = self.call_if(!self.get_z(), bus, next_pc),
             0xD4 => next_pc = self.call_if(!self.get_c(), bus, next_pc),
@@ -587,8 +596,21 @@ impl CPU {
             0xD0 => next_pc = self.return_if(!self.get_c(), bus, next_pc),
             0xC8 => next_pc = self.return_if(self.get_z(), bus, next_pc),
             0xD8 => next_pc = self.return_if(self.get_c(), bus, next_pc),
-            // 0xD9 => RETI
+            0xD9 => {
+                next_pc = self.return_if(true, bus, next_pc);
+                self.ime = true;
+            }
             0xC9 => next_pc = self.return_if(true, bus, next_pc),
+
+            // RST
+            0xC7 => next_pc = self.rst(bus, next_pc, 0x00),
+            0xD7 => next_pc = self.rst(bus, next_pc, 0x10),
+            0xE7 => next_pc = self.rst(bus, next_pc, 0x20),
+            0xF7 => next_pc = self.rst(bus, next_pc, 0x30),
+            0xCF => next_pc = self.rst(bus, next_pc, 0x08),
+            0xDF => next_pc = self.rst(bus, next_pc, 0x18),
+            0xEF => next_pc = self.rst(bus, next_pc, 0x28),
+            0xFF => next_pc = self.rst(bus, next_pc, 0x38),
 
             0xC1 => self.pop_bc(bus),
             0xD1 => self.pop_de(bus),
@@ -747,7 +769,7 @@ impl CPU {
             0x9D => self.sub_from_a(self.l, self.get_c() as u8),
             0x9E => self.sub_from_a(bus.read(self.get_hl()), self.get_c() as u8),
             0x9F => self.sub_from_a(self.a, self.get_c() as u8),
-            0xD7 => {
+            0xDE => {
                 let n8 = bus.read(next_pc);
                 self.sub_from_a(n8, self.get_c() as u8);
                 next_pc = next_pc.wrapping_add(1);
@@ -780,9 +802,8 @@ impl CPU {
                 self.set_h(false);
             }
 
+            // DAA
             0x27 => {
-                // DAA
-                // https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7#DAA
                 let mut adjustment = 0;
                 if self.get_n() {
                     if self.get_h() {
@@ -819,14 +840,132 @@ impl CPU {
         return true;
     }
 
-    fn execute_cb(&mut self, bus: &Bus, current_pc: u16) -> bool {
+    fn sla(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, _| (r << 1, (r & 0b10000000 != 0)));
+    }
+
+    fn sra(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, _| {
+            (r >> 1 | r & 0b10000000, (r & 0b00000001 != 0))
+        });
+    }
+
+    fn srl(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, _| (r >> 1, (r & 0b00000001 != 0)));
+    }
+
+    fn rl(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, c| ((r << 1 | c as u8), (r & 0b10000000 != 0)));
+    }
+
+    fn rr(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, c| {
+            (r >> 1 | (c as u8) << 7, (r & 0b00000001 != 0))
+        });
+    }
+
+    fn rlc(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, _| {
+            (CPU::rotate_left(r), (r & 0b10000000 != 0))
+        });
+    }
+
+    fn rrc(&mut self, reg: u8, bus: &mut Bus) {
+        self.shift_op(bus, reg, |r, _| {
+            (CPU::rotate_right(r), (r & 0b00000001 != 0))
+        });
+    }
+
+    fn shift_op(&mut self, bus: &mut Bus, reg: u8, op: fn(u8, bool) -> (u8, bool)) {
+        let curr_reg = self.get_register(reg, bus);
+        let (new_reg, new_c) = op(curr_reg, self.get_c());
+        self.set_c(new_c);
+        self.set_n(false);
+        self.set_h(false);
+        self.set_z(new_reg == 0);
+        self.set_register(reg, new_reg, bus);
+    }
+
+    fn swap(&mut self, reg: u8, bus: &mut Bus) {
+        let curr_reg = self.get_register(reg, bus);
+        let new_reg = curr_reg << 4 | curr_reg >> 4;
+        self.set_c(false);
+        self.set_n(false);
+        self.set_h(false);
+        self.set_z(new_reg == 0);
+        self.set_register(reg, new_reg, bus);
+    }
+
+    fn get_register(&self, reg: u8, bus: &Bus) -> u8 {
+        match reg {
+            0 => self.b,
+            1 => self.c,
+            2 => self.d,
+            3 => self.e,
+            4 => self.h,
+            5 => self.l,
+            6 => bus.read(self.get_hl()),
+            7 => self.a,
+            _ => panic!("Invalid register index: {}", reg),
+        }
+    }
+
+    fn bit(&mut self, bit_index: u8, reg: u8, bus: &Bus) {
+        let curr_reg = self.get_register(reg, bus);
+        let bit = (curr_reg >> bit_index) & 0b00000001;
+        self.set_n(false);
+        self.set_h(true);
+        self.set_z(bit == 0);
+    }
+
+    fn set_register(&mut self, reg: u8, value: u8, bus: &mut Bus) {
+        match reg {
+            0 => self.b = value,
+            1 => self.c = value,
+            2 => self.d = value,
+            3 => self.e = value,
+            4 => self.h = value,
+            5 => self.l = value,
+            6 => bus.write(self.get_hl(), value),
+            7 => self.a = value,
+            _ => panic!("Invalid register index: {}", reg),
+        }
+    }
+    fn execute_cb(&mut self, bus: &mut Bus, current_pc: u16) -> bool {
         let opcode = bus.read(current_pc);
         let next_pc = current_pc.wrapping_add(1);
-        println!("NEXT CB: 0xCB{:02X}", opcode);
-        match opcode {
-            // 0x38 => {
-            //     println!("SRL B 2  8 Z 0 0 C")
-            // }
+
+        let category: u8 = opcode >> 6; // 1100 0000 -> 0000 0011
+        let subcategory: u8 = opcode >> 3 & 0b00000111; // 1111 1000 -> 0001 1111 -> 00000111
+        let operand: u8 = opcode & 0b00000111; // 0000 0111 
+
+        println!("NEXT CB: {:02X}", category);
+        println!("category: {:02X}", subcategory);
+        println!("operant {:02X}", operand);
+
+        match category {
+            0 => match subcategory {
+                0 => self.rlc(operand, bus),
+                1 => self.rrc(operand, bus),
+                2 => self.rl(operand, bus),
+                3 => self.rr(operand, bus),
+                4 => self.sla(operand, bus),
+                5 => self.sra(operand, bus),
+                6 => self.swap(operand, bus),
+                7 => self.srl(operand, bus),
+                _ => {}
+            },
+            1 => {
+                println!("bit");
+                self.bit(subcategory, operand, bus);
+            }
+            2 => {
+                // res
+            }
+            3 => {
+                // set
+            }
+
             _ => {
                 println!(
                     "Unimplemented opcode: 0xCB{:02X} at PC: 0x{:04X}",
