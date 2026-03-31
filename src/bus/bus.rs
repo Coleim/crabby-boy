@@ -1,4 +1,4 @@
-use crate::cpu::ioregisters::IORegisters;
+use crate::bus::iobridge::IOBridge;
 
 // Start	End	Description	Notes
 // 0000	3FFF	16 KiB ROM bank 00	From cartridge, usually a fixed bank
@@ -19,7 +19,7 @@ pub struct Bus {
     eram: [u8; 0x2000],
     wram: [u8; 0x2000],
     oam: [u8; 0x2000],
-    io: IORegisters,
+    io: IOBridge,
     // serial: Serial,
     hram: [u8; 0x2000],
     ie: u8,
@@ -33,7 +33,7 @@ impl Bus {
             eram: [0; 0x2000],
             wram: [0; 0x2000],
             oam: [0; 0x2000],
-            io: IORegisters::new(),
+            io: IOBridge::new(),
             hram: [0; 0x2000],
             ie: 0,
         }
@@ -47,7 +47,7 @@ impl Bus {
     pub fn clear_if(&mut self, mask: u8) {
         self.io.clear_if(mask);
     }
-    pub fn get_io(&self) -> &IORegisters {
+    pub fn get_io(&self) -> &IOBridge {
         &self.io
     }
     pub fn get_ie(&self) -> u8 {
@@ -56,6 +56,7 @@ impl Bus {
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => self.rom[addr as usize], // Banking 0
+            // 0x4000..=0x7FFF => self.rom[addr as usize], // For now no banking // Banking 1
             0x4000..=0x7FFF => self.rom[addr as usize], // For now no banking // Banking 1
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
@@ -73,19 +74,6 @@ impl Bus {
             0xFFFF => self.ie,
         }
     }
-
-    //     struct Rom {
-    //     value: Vec<u8>,
-    //         write()
-    // }
-    //
-    // impl From<u16> for Rom {
-    //     fn from(item: u16) -> Self {
-    //         Rom { value: item }
-    //     }
-    // }
-    //  Number::from(addr).write();
-    //
 
     pub fn write(&mut self, addr: u16, val: u8) {
         //TODO: https://doc.rust-lang.org/rust-by-example/conversion/from_into.html

@@ -1,13 +1,13 @@
-pub struct TimerAndDivider {
+pub struct Timer {
     internal_div: u16, // The real 16-bit counter // FF04 — DIV: Divider register
     tima: u8,          // FF05 — TIMA: Timer counter
     tma: u8,           // FF06 — TMA: Timer modulo
     tac: u8,           // FF07 — TAC: Timer control
 }
 
-impl TimerAndDivider {
+impl Timer {
     pub fn new() -> Self {
-        TimerAndDivider {
+        Timer {
             internal_div: 0,
             tima: 0,
             tma: 0,
@@ -37,7 +37,6 @@ impl TimerAndDivider {
                 if was_set && !is_set {
                     if (self.tima as u16).wrapping_add(1) > 0xFF {
                         self.tima = self.tma;
-                        // println!("TICK - internaldiv {}", self.internal_div);
                         return true;
                     } else {
                         self.tima = self.tima.wrapping_add(1);

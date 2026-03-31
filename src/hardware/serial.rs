@@ -19,11 +19,9 @@ impl Serial {
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0xFF01 => {
-                println!("SB WRITE: 0x{:02X} '{}'", val, val as char);
                 self.sb = val;
             }
             0xFF02 => {
-                println!("SC WRITE: 0x{:02X}", val);
                 self.sc = val;
                 if self.sc == 0x81 {
                     print!("{}", self.sb as char);

@@ -1,4 +1,4 @@
-pub struct Audio {
+pub struct APU {
     nr52: u8, // FF26 — NR52: Audio master control
     nr51: u8, // FF25 — NR51: Sound panning
     nr50: u8, // FF24 — NR50: Master volume & VIN panning
@@ -6,9 +6,9 @@ pub struct Audio {
               // nr44: u8, // FF23 — NR44: Channel 4 control
 }
 
-impl Audio {
+impl APU {
     pub fn new() -> Self {
-        Audio {
+        APU {
             nr52: 0,
             nr51: 0,
             nr50: 0,

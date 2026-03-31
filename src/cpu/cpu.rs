@@ -1,5 +1,3 @@
-use std::iter::Cycle;
-
 use crate::Bus;
 
 const CYCLES: [u8; 256] = [
