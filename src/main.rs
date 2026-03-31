@@ -6,13 +6,14 @@ use crate::cpu::header::CartdrigeHeader;
 
 fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
+    let file_path = "./tests/halt_bug.gb";
     // let file_path = "./tests/cpu_instrs.gb";
     // let file_path = "./tests/cpu_instrs/01-special.gb";
     // let file_path = "./tests/cpu_instrs/02-interrupts.gb";
     // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
     // let file_path = "./tests/cpu_instrs/04-op r,imm.gb";
     // let file_path = "./tests/cpu_instrs/05-op rp.gb";
-    let file_path = "./tests/cpu_instrs/06-ld r,r.gb";
+    // let file_path = "./tests/cpu_instrs/06-ld r,r.gb";
     // let file_path = "./tests/cpu_instrs/07-jr,jp,call,ret,rst.gb";
     // let file_path = "./tests/cpu_instrs/08-misc instrs.gb";
     // let file_path = "./tests/cpu_instrs/09-op r,r.gb";
@@ -28,21 +29,55 @@ fn main() -> Result<(), String> {
     header.is_valid()?;
     // create cpu
     let mut cpu: CPU = CPU::new();
+    // let mut cycle_count = 0;
     loop {
+        // cycle_count += 1;
+        // if cycle_count == 500_000 {
+        //     println!("=== WRAM DUMP ===");
+        //     for addr in (0xC000u16..=0xC500u16).step_by(1) {
+        //         if (addr & 0xF) == 0 {
+        //             print!("\n{:04X}: ", addr);
+        //         }
+        //         print!("{:02X} ", bus.read(addr));
+        //     }
+        //     println!();
+        // }
+
         if cpu.stopped {
-            // println!("CPU STOPPED. Waiting interrupts");
+            println!("CPU STOPPED. Waiting interrupts");
             // CPU does nothing until an interrupt or button press wakes it
             // check_interrupts(&mut cpu);
             break;
         }
         if cpu.halt {
-            break; // for emulator convenience
+            // println!("CPU HALTED");
+            bus.tick(4);
+            // println!("HALT CHECK IF: 0x{:02X}", bus.get_io().get_if());
+            let ie = bus.get_ie();
+            let if_flag = bus.get_io().get_if();
+            if (ie & if_flag) != 0 {
+                // println!("CPU IE: {} IF: {} ; IME : {}", ie, if_flag, cpu.ime);
+                cpu.halt = false;
+                // ADD THIS:
+                // println!("HALT EXIT → PC: 0x{:04X}", cpu.pc);
+                // println!("  IE: {:08b} ({:02X})", ie, ie);
+                // println!("  IF: {:08b} ({:02X})", if_flag, if_flag);
+                // println!("  IME: {}", cpu.ime);
+            } else {
+                // println!("CONTINUE ppu_cycles: {}", bus.get_io().get_ppu_cycles());
+                continue;
+            }
         }
 
-        if !cpu.execute(&mut bus) {
-            break;
+        match cpu.execute(&mut bus) {
+            Some(tick) => {
+                bus.tick(tick);
+                cpu.handle_interrupts(&mut bus);
+            }
+            None => {
+                panic!(" Error in getting the cycles ");
+            }
         }
-        // check_serial(&mut mem);
     }
 
     Ok(())

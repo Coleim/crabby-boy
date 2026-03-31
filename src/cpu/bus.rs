@@ -38,8 +38,20 @@ impl Bus {
             ie: 0,
         }
     }
+    pub fn tick(&mut self, cycles: u8) {
+        self.io.tick(cycles);
+    }
     pub fn get_rom(&self) -> &Vec<u8> {
         &self.rom
+    }
+    pub fn clear_if(&mut self, mask: u8) {
+        self.io.clear_if(mask);
+    }
+    pub fn get_io(&self) -> &IORegisters {
+        &self.io
+    }
+    pub fn get_ie(&self) -> u8 {
+        self.ie
     }
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
@@ -81,11 +93,20 @@ impl Bus {
             0x0000..=0x7FFF => {} // TODO : Implement MBC switch
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
-            0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
+            0xC000..=0xDFFF => {
+                // println!("WRITE TO WRAM {:02x}, val: {:02x}", addr, val);
+                self.wram[(addr - 0xC000) as usize] = val;
+            }
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,
             0xFF00..=0xFF7F => self.io.write(addr, val),
-            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = val,
+            0xFF80..=0xFFFE => {
+                // println!(
+                //     "HRAM OUTPUT 0x{:04X} = 0x{:02X} '{}'",
+                //     addr, val, val as char
+                // );
+                self.hram[(addr - 0xFF80) as usize] = val;
+            }
             0xFFFF => self.ie = val,
             _ => {
                 println!("[BUS] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);

@@ -1,4 +1,44 @@
+use std::iter::Cycle;
+
 use crate::Bus;
+
+const CYCLES: [u8; 256] = [
+    4, 12, 8, 8, 4, 4, 8, 4, 20, 8, 8, 8, 4, 4, 8, 4, // 0x00-0x0F
+    4, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, // 0x10-0x1F
+    12, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, // 0x20-0x2F
+    12, 12, 8, 8, 12, 12, 12, 4, 12, 8, 8, 8, 4, 4, 8, 4, // 0x30-0x3F
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x40-0x4F
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x50-0x5F
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x60-0x6F
+    8, 8, 8, 8, 8, 8, 4, 8, 4, 4, 4, 4, 4, 4, 8, 4, // 0x70-0x7F
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x80-0x8F
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x90-0x9F
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0xA0-0xAF
+    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0xB0-0xBF
+    20, 12, 16, 16, 24, 16, 8, 16, 20, 16, 16, 4, 24, 24, 8, 16, // 0xC0-0xCF
+    20, 12, 16, 0, 24, 16, 8, 16, 20, 16, 16, 0, 24, 0, 8, 16, // 0xD0-0xDF
+    12, 12, 8, 0, 0, 16, 8, 16, 16, 4, 16, 0, 0, 0, 8, 16, // 0xE0-0xEF
+    12, 12, 8, 4, 0, 16, 8, 16, 12, 8, 16, 4, 0, 0, 8, 16, // 0xF0-0xFF
+];
+
+const CB_CYCLES: [u8; 256] = [
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x00-0x0F
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x10-0x1F
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x20-0x2F
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x30-0x3F
+    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x40-0x4F
+    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x50-0x5F
+    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x60-0x6F
+    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x70-0x7F
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x80-0x8F
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x90-0x9F
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xA0-0xAF
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xB0-0xBF
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xC0-0xCF
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xD0-0xDF
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xE0-0xEF
+    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xF0-0xFF
+];
 
 pub struct CPU {
     pub a: u8,
@@ -13,6 +53,7 @@ pub struct CPU {
     pub sp: u16,
     pub stopped: bool,
     pub halt: bool,
+    pub halt_bug: bool,
     pub ime: bool,
     pub ime_pending: bool,
 }
@@ -32,6 +73,7 @@ impl CPU {
             sp: 0xFFFE, // $FFFE
             stopped: false,
             halt: false,
+            halt_bug: false,
             ime: false,
             ime_pending: false,
         }
@@ -226,23 +268,27 @@ impl CPU {
         result
     }
 
-    fn jump_relative_if(&self, bus: &Bus, addr: u16, condition: bool) -> u16 {
+    fn jump_relative_if(&self, bus: &Bus, addr: u16, condition: bool) -> (u16, u8) {
         let e8 = bus.read(addr) as i8;
         let mut new_addr = addr.wrapping_add(1);
+        let mut cycles = 8;
         if condition {
             new_addr = new_addr.wrapping_add_signed(e8 as i16);
+            cycles = 12;
         }
-        new_addr
+        (new_addr, cycles)
     }
 
-    fn jump_if(&self, bus: &Bus, addr: u16, condition: bool) -> u16 {
+    fn jump_if(&self, bus: &Bus, addr: u16, condition: bool) -> (u16, u8) {
         // JP a16 3  16 - - - -
         let a16 = self.read16bytes(bus, addr);
         let mut new_addr = addr.wrapping_add(2);
+        let mut cycles = 12;
         if condition {
             new_addr = a16;
+            cycles = 16;
         }
-        new_addr
+        (new_addr, cycles)
     }
 
     fn rst(&mut self, bus: &mut Bus, curr: u16, dest: u16) -> u16 {
@@ -251,26 +297,28 @@ impl CPU {
         dest
     }
 
-    fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> u16 {
+    fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> (u16, u8) {
         let ret = addr.wrapping_add(2); // Adresse de retour
+        // println!("CALL RET:0x{:04X} ADDR: 0x{:04X}", ret, addr);
         if condition {
             let n16 = self.read16bytes(bus, addr); // Adresse cible (du CALL)
             self.sp = self.sp.wrapping_sub(2); // Décrémenter SP pour empiler sur la stack
             self.write16bytes(bus, self.sp, ret); // Ecrire l'adresse de retour sur la stack
-            n16 // Aller a l'adresse du CALL
+            // println!("CALL n16: 0x{:04X} SP: 0x{:04X}", n16, self.sp);
+            (n16, 24) // Aller a l'adresse du CALL
         } else {
-            ret
+            (ret, 12)
         }
     }
 
-    fn return_if(&mut self, condition: bool, bus: &mut Bus, current_pc: u16) -> u16 {
+    fn return_if(&mut self, condition: bool, bus: &mut Bus, current_pc: u16) -> (u16, u8) {
         if condition {
             // return from fonction call
             let n16 = self.read16bytes(bus, self.sp);
             self.sp = self.sp.wrapping_add(2);
-            n16
+            (n16, 20)
         } else {
-            current_pc
+            (current_pc, 8)
         }
     }
 
@@ -339,24 +387,84 @@ impl CPU {
         self.set_h(false);
     }
 
+    pub fn handle_interrupts(&mut self, bus: &mut Bus) {
+        if self.ime == false {
+            return;
+        }
+        let ie = bus.get_ie();
+        let iflag = bus.get_io().get_if();
+
+        let triggered = ie & iflag;
+
+        if triggered == 0 {
+            return;
+        }
+
+        let bit = triggered.trailing_zeros() as u8;
+        // Clear that bit in IF — mark it as handled
+        let mask = 1 << bit;
+        bus.clear_if(mask);
+        self.ime = false;
+        // Push current PC onto stack
+        self.sp = self.sp.wrapping_sub(2);
+        self.write16bytes(bus, self.sp, self.pc);
+
+        // Jump to the corresponding vector address
+        match bit {
+            0 => self.pc = 0x0040, // VBlank
+            1 => self.pc = 0x0048, // LCD STAT
+            2 => self.pc = 0x0050, // Timer
+            3 => self.pc = 0x0058, // Serial
+            4 => self.pc = 0x0060, // Joypad
+            _ => std::panic!("Unexpected interrupt {:02x}", bit),
+        }
+    }
+
     // pub fn execute(&mut self, bus: &mut Bus) -> bool {
-    pub fn execute(&mut self, bus: &mut Bus) -> bool {
+    pub fn execute(&mut self, bus: &mut Bus) -> Option<u8> {
+        // if self.sp < 0xDFF0 {
+        //     println!("STACK DEEP: SP=0x{:04X} PC=0x{:04X}", self.sp, self.pc);
+        // }
+
+        if self.pc == 0xC818 {
+            println!("CRASH AT C818 - test failed!");
+            println!(
+                "Registers: A={:02X} B={:02X} C={:02X} D={:02X} E={:02X} H={:02X} L={:02X}",
+                self.a, self.b, self.c, self.d, self.e, self.h, self.l
+            );
+            std::panic!("CRASH AT C818 - test failed!");
+        }
+
+        if self.pc == 0xC819 {
+            println!("CRASH AT C819 - test failed!");
+            println!(
+                "Registers: A={:02X} B={:02X} C={:02X} D={:02X} E={:02X} H={:02X} L={:02X}",
+                self.a, self.b, self.c, self.d, self.e, self.h, self.l
+            );
+            std::panic!("STOP");
+        }
+
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
         }
 
-        // TODO: Check for interrupts if IME is set
-        if self.ime {
-            self.ime_pending = false;
-        }
-
         let opcode: u8 = bus.read(self.pc);
+        let mut cycles: u8 = CYCLES[opcode as usize];
+
         // println!(
-        //     "PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
+        //     "EXECUTE PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
         //     self.pc, opcode, self.sp
         // );
-        let mut next_pc: u16 = self.pc.wrapping_add(1);
+        //
+        let mut next_pc: u16 = if self.halt_bug {
+            println!("HALT BUG  PC: {:02x}", self.pc);
+            self.halt_bug = false;
+            self.pc
+        } else {
+            self.pc.wrapping_add(1)
+        };
+
         match opcode {
             0x00 => {}                   // NOP 1  4
             0x10 => self.stopped = true, // STOP n8 2  4
@@ -555,7 +663,34 @@ impl CPU {
             0x73 => bus.write(self.get_hl(), self.e),
             0x74 => bus.write(self.get_hl(), self.h),
             0x75 => bus.write(self.get_hl(), self.l),
-            0x76 => self.halt = true, // HALT
+            0x76 => {
+                let ie = bus.get_ie();
+                let if_flag = bus.get_io().get_if();
+                // println!(
+                //     "0x76 HALT → IME: {} IE: 0x{:02X} IF: 0x{:02X}",
+                //     self.ime, ie, if_flag
+                // );
+                if !self.ime && (ie & if_flag) != 0 {
+                    println!(
+                        "HALT BUG: F={:02X} PC={:04X} A={:02X} B={:02X} C={:02X} D={:02X} E={:02X}",
+                        self.f, self.pc, self.a, self.b, self.c, self.d, self.e
+                    );
+                    println!(
+                        "HALT BUG: IE={:02X} IF={:02X} F={:02X} PC={:04X}",
+                        ie, if_flag, self.f, self.pc
+                    );
+
+                    self.halt_bug = true;
+                }
+
+                if !self.ime && (ie & if_flag) != 0 {
+                    // HALT BUG — don't halt, just corrupt next fetch
+                    self.halt_bug = true;
+                    // println!("HALT BUG TRIGGERED");
+                } else {
+                    self.halt = true;
+                }
+            }
             0x77 => bus.write(self.get_hl(), self.a),
 
             // LD (HL),B
@@ -569,39 +704,40 @@ impl CPU {
             0x7F => {} // self.a = self.a,
 
             // Jumps relative
-            0x18 => next_pc = self.jump_relative_if(bus, next_pc, true),
-            0x20 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_z()),
-            0x30 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_c()),
-            0x28 => next_pc = self.jump_relative_if(bus, next_pc, self.get_z()),
-            0x38 => next_pc = self.jump_relative_if(bus, next_pc, self.get_c()),
+            0x18 => (next_pc, _) = self.jump_relative_if(bus, next_pc, true),
+            0x20 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, !self.get_z()),
+            0x30 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, !self.get_c()),
+            0x28 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, self.get_z()),
+            0x38 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, self.get_c()),
 
             // Jump
-            0xC3 => next_pc = self.jump_if(bus, next_pc, true),
-            0xC2 => next_pc = self.jump_if(bus, next_pc, !self.get_z()),
-            0xD2 => next_pc = self.jump_if(bus, next_pc, !self.get_c()),
-            0xCA => next_pc = self.jump_if(bus, next_pc, self.get_z()),
-            0xDA => next_pc = self.jump_if(bus, next_pc, self.get_c()),
+            0xC3 => (next_pc, _) = self.jump_if(bus, next_pc, true),
+            0xC2 => (next_pc, cycles) = self.jump_if(bus, next_pc, !self.get_z()),
+            0xD2 => (next_pc, cycles) = self.jump_if(bus, next_pc, !self.get_c()),
+            0xCA => (next_pc, cycles) = self.jump_if(bus, next_pc, self.get_z()),
+            0xDA => (next_pc, cycles) = self.jump_if(bus, next_pc, self.get_c()),
             0xE9 => next_pc = self.get_hl(),
 
             0xF3 => self.ime = false,
             0xFB => self.ime_pending = true,
+
             // CALL
-            0xC4 => next_pc = self.call_if(!self.get_z(), bus, next_pc),
-            0xD4 => next_pc = self.call_if(!self.get_c(), bus, next_pc),
-            0xCC => next_pc = self.call_if(self.get_z(), bus, next_pc),
-            0xDC => next_pc = self.call_if(self.get_c(), bus, next_pc),
-            0xCD => next_pc = self.call_if(true, bus, next_pc),
+            0xC4 => (next_pc, cycles) = self.call_if(!self.get_z(), bus, next_pc),
+            0xD4 => (next_pc, cycles) = self.call_if(!self.get_c(), bus, next_pc),
+            0xCC => (next_pc, cycles) = self.call_if(self.get_z(), bus, next_pc),
+            0xDC => (next_pc, cycles) = self.call_if(self.get_c(), bus, next_pc),
+            0xCD => (next_pc, _) = self.call_if(true, bus, next_pc),
 
             // RET
-            0xC0 => next_pc = self.return_if(!self.get_z(), bus, next_pc),
-            0xD0 => next_pc = self.return_if(!self.get_c(), bus, next_pc),
-            0xC8 => next_pc = self.return_if(self.get_z(), bus, next_pc),
-            0xD8 => next_pc = self.return_if(self.get_c(), bus, next_pc),
+            0xC0 => (next_pc, cycles) = self.return_if(!self.get_z(), bus, next_pc),
+            0xD0 => (next_pc, cycles) = self.return_if(!self.get_c(), bus, next_pc),
+            0xC8 => (next_pc, cycles) = self.return_if(self.get_z(), bus, next_pc),
+            0xD8 => (next_pc, cycles) = self.return_if(self.get_c(), bus, next_pc),
             0xD9 => {
-                next_pc = self.return_if(true, bus, next_pc);
+                (next_pc, _) = self.return_if(true, bus, next_pc);
                 self.ime = true;
             }
-            0xC9 => next_pc = self.return_if(true, bus, next_pc),
+            0xC9 => (next_pc, _) = self.return_if(true, bus, next_pc),
 
             // RST
             0xC7 => next_pc = self.rst(bus, next_pc, 0x00),
@@ -833,12 +969,12 @@ impl CPU {
                     "Unimplemented opcode: 0x{:02X} at PC: 0x{:04X}",
                     opcode, self.pc
                 );
-                return false;
+                return None;
             }
         }
-        // println!(" Going to addr: {:#x}", next_pc);
+
         self.pc = next_pc;
-        return true;
+        return Some(cycles);
     }
 
     fn sla(&mut self, reg: u8, bus: &mut Bus) {
@@ -946,7 +1082,7 @@ impl CPU {
             _ => panic!("Invalid register index: {}", reg),
         }
     }
-    fn execute_cb(&mut self, bus: &mut Bus, current_pc: u16) -> bool {
+    fn execute_cb(&mut self, bus: &mut Bus, current_pc: u16) -> Option<u8> {
         let opcode = bus.read(current_pc);
         let next_pc = current_pc.wrapping_add(1);
 
@@ -979,12 +1115,12 @@ impl CPU {
                     "Unimplemented opcode: 0xCB{:02X} at PC: 0x{:04X}",
                     opcode, self.pc
                 );
-                return false;
+                return None;
             }
         }
 
         // println!(" Going to addr: {:#x}", next_pc);
         self.pc = next_pc;
-        return true;
+        return Some(CB_CYCLES[opcode as usize]);
     }
 }
