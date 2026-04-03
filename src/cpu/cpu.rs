@@ -424,24 +424,6 @@ impl CPU {
         //     println!("STACK DEEP: SP=0x{:04X} PC=0x{:04X}", self.sp, self.pc);
         // }
 
-        if self.pc == 0xC818 {
-            println!("CRASH AT C818 - test failed!");
-            println!(
-                "Registers: A={:02X} B={:02X} C={:02X} D={:02X} E={:02X} H={:02X} L={:02X}",
-                self.a, self.b, self.c, self.d, self.e, self.h, self.l
-            );
-            std::panic!("CRASH AT C818 - test failed!");
-        }
-
-        if self.pc == 0xC819 {
-            println!("CRASH AT C819 - test failed!");
-            println!(
-                "Registers: A={:02X} B={:02X} C={:02X} D={:02X} E={:02X} H={:02X} L={:02X}",
-                self.a, self.b, self.c, self.d, self.e, self.h, self.l
-            );
-            std::panic!("STOP");
-        }
-
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
@@ -464,8 +446,11 @@ impl CPU {
         };
 
         match opcode {
-            0x00 => {}                   // NOP 1  4
-            0x10 => self.stopped = true, // STOP n8 2  4
+            0x00 => {} // NOP 1  4
+            0x10 => {
+                println!("STOPPING CPU with opcode 0x10");
+                self.stopped = true; // STOP n8 2  4
+            }
             0x01 => next_pc = self.load_16_to(bus, next_pc, Self::set_bc),
             0x11 => next_pc = self.load_16_to(bus, next_pc, Self::set_de),
             0x21 => next_pc = self.load_16_to(bus, next_pc, Self::set_hl),

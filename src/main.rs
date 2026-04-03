@@ -10,9 +10,9 @@ fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
     // let file_path = "./tests/halt_bug.gb";
     // let file_path = "./tests/cpu_instrs.gb";
-    let file_path = "./tests/cpu_instrs/01-special.gb";
+    // let file_path = "./tests/cpu_instrs/01-special.gb";
     // let file_path = "./tests/cpu_instrs/02-interrupts.gb";
-    // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
+    let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
     // let file_path = "./tests/cpu_instrs/04-op r,imm.gb";
     // let file_path = "./tests/cpu_instrs/05-op rp.gb";
     // let file_path = "./tests/cpu_instrs/06-ld r,r.gb";
@@ -33,6 +33,12 @@ fn main() -> Result<(), String> {
     let mut cpu: CPU = CPU::new();
     loop {
         if cpu.stopped {
+            println!(
+                "EXECUTE PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
+                cpu.pc,
+                bus.read(cpu.pc),
+                cpu.sp
+            );
             println!("CPU STOPPED. Waiting interrupts");
             // CPU does nothing until an interrupt or button press wakes it
             break;

@@ -19,9 +19,7 @@ impl Timer {
         for _ in 0..cycles {
             let before = self.internal_div;
             self.internal_div = self.internal_div.wrapping_add(1);
-            // Check TAC to increment TIMA
             if self.tac & 0b0000_0100 != 0 {
-                // println!("TAC");
                 let clock_select = self.tac & 0b0000_0011;
                 let bit = match clock_select {
                     0 => 9,

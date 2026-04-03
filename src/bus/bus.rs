@@ -23,6 +23,7 @@ pub struct Bus {
     // serial: Serial,
     hram: [u8; 0x2000],
     ie: u8,
+    bank_number: u8,
 }
 
 impl Bus {
@@ -36,6 +37,7 @@ impl Bus {
             io: IOBridge::new(),
             hram: [0; 0x2000],
             ie: 0,
+            bank_number: 0,
         }
     }
     pub fn tick(&mut self, cycles: u8) {
@@ -56,7 +58,6 @@ impl Bus {
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => self.rom[addr as usize], // Banking 0
-            // 0x4000..=0x7FFF => self.rom[addr as usize], // For now no banking // Banking 1
             0x4000..=0x7FFF => self.rom[addr as usize], // For now no banking // Banking 1
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
@@ -68,7 +69,6 @@ impl Bus {
             0xFEA0..=0xFEFF => {
                 std::panic::panic_any("Not Usable	Nintendo says use of this area is prohibited.")
             }
-
             0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
             0xFFFF => self.ie,
@@ -78,27 +78,24 @@ impl Bus {
     pub fn write(&mut self, addr: u16, val: u8) {
         //TODO: https://doc.rust-lang.org/rust-by-example/conversion/from_into.html
         match addr {
+            0x2000..=0x3FFF => {
+                // Enable bank
+                println!("ROM Bank Number (Write Only): {:02x}", val);
+            }
+            0x6000..=0x7FFF => {
+                println!("Banking Mode Select (Write Only): {:02x}", val);
+            }
             0x0000..=0x7FFF => {} // TODO : Implement MBC switch
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
-            0xC000..=0xDFFF => {
-                // println!("WRITE TO WRAM {:02x}, val: {:02x}", addr, val);
-                self.wram[(addr - 0xC000) as usize] = val;
-            }
+            0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,
             0xFF00..=0xFF7F => self.io.write(addr, val),
-            0xFF80..=0xFFFE => {
-                // println!(
-                //     "HRAM OUTPUT 0x{:04X} = 0x{:02X} '{}'",
-                //     addr, val, val as char
-                // );
-                self.hram[(addr - 0xFF80) as usize] = val;
-            }
+            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = val,
             0xFFFF => self.ie = val,
             _ => {
-                println!("[BUS] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-                std::panic::panic_any("[BUS] WRITE NOT IMPLEMENTED");
+                std::panic!("[BUS] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
             }
         }
     }
