@@ -1,20 +1,28 @@
 
-- [] PPU Register 
-- [] Implem les write/read manquant 
-- [] ROM Banking
 - [] Find a way to run any ROM (create an emulator class)
+- [] Map the serial to somehting and read the bus for the tests  
+- [] Create a UI to Run the Emulator ? 
 - [] Play sound
 
 
 
-- [ ]  The MBC internal address being accessed can be calculated using this formula: `((address - external_ram_start_address) + (active_ram_bank * ram_bank_size)) % max_external_ram_size`. 
+main loop:
+
+while running:
+    cycles = cpu.step()
+
+    ppu.step(cycles)
+    apu.step(cycles)
+
+    if frame_ready:
+        render()
+
+    if audio_buffer_ready:
+        send_to_cpal()
 
 
 
-
-
-
-
-
-https://rgbds.gbdev.io/docs/v1.0.0/gbz80.7#LD_r8,r8
+Affichage → pixels ou wgpu ou minifb
+Audio → cpal
+Input → winit
 
