@@ -52,7 +52,7 @@ impl IOBridge {
             0xFF0F => self.interrupt_flag,
             0xFF10..=0xFF26 => self.audio.read(addr),
             0xFF40..=0xFF4B => self.ppu.read(addr),
-            0xFF4D => self.key1_spd,
+            0xFF4D => 0xFF, // CGB only flag - we are on DMG
             _ => {
                 println!("[IOREG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
                 0x00

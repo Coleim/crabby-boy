@@ -9,10 +9,10 @@ use crate::cpu::header::CartdrigeHeader;
 fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
     // let file_path = "./tests/halt_bug.gb";
-    // let file_path = "./tests/cpu_instrs.gb";
+    let file_path = "./tests/cpu_instrs.gb";
     // let file_path = "./tests/cpu_instrs/01-special.gb";
     // let file_path = "./tests/cpu_instrs/02-interrupts.gb";
-    let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
+    // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
     // let file_path = "./tests/cpu_instrs/04-op r,imm.gb";
     // let file_path = "./tests/cpu_instrs/05-op rp.gb";
     // let file_path = "./tests/cpu_instrs/06-ld r,r.gb";
@@ -66,14 +66,3 @@ fn main() -> Result<(), String> {
 
     Ok(())
 }
-
-// Aussi, ton halt devrait ne pas break mais plutôt attendre une interruption comme stopped :
-// if cpu.halt {
-//     // Sortir du halt uniquement si une interruption est pending
-//     let ie = bus.read(0xFFFF);
-//     let if_ = bus.read(0xFF0F);
-//     if ie & if_ != 0 {
-//         cpu.halt = false;
-//     }
-//     continue; // pas break !
-// }

@@ -448,8 +448,8 @@ impl CPU {
         match opcode {
             0x00 => {} // NOP 1  4
             0x10 => {
-                println!("STOPPING CPU with opcode 0x10");
                 self.stopped = true; // STOP n8 2  4
+                next_pc = next_pc.wrapping_add(1);
             }
             0x01 => next_pc = self.load_16_to(bus, next_pc, Self::set_bc),
             0x11 => next_pc = self.load_16_to(bus, next_pc, Self::set_de),
