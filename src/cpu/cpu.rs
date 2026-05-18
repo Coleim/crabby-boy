@@ -957,6 +957,7 @@ impl CPU {
         }
 
         self.pc = next_pc;
+
         return Some(cycles);
     }
 

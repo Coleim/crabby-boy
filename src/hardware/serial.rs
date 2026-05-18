@@ -1,11 +1,20 @@
 pub struct Serial {
     sb: u8, // data register (0xFF01)
     sc: u8, // control register (0xFF02)
+    pub serial_output: Vec<u8>,
 }
 
 impl Serial {
     pub fn new() -> Self {
-        Serial { sb: 0, sc: 0 }
+        Serial {
+            sb: 0,
+            sc: 0,
+            serial_output: Vec::new(),
+        }
+    }
+
+    pub fn serial_output(&self) -> &Vec<u8> {
+        &self.serial_output
     }
 
     pub fn read(&self, addr: u16) -> u8 {
@@ -25,6 +34,7 @@ impl Serial {
                 self.sc = val;
                 if self.sc == 0x81 {
                     print!("{}", self.sb as char);
+                    self.serial_output.push(self.sb);
                     self.sc = 0x00;
                 }
             }

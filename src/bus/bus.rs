@@ -37,7 +37,7 @@ impl Bus {
             io: IOBridge::new(),
             hram: [0; 0x2000],
             ie: 0,
-            bank_number: 0,
+            bank_number: 1,
         }
     }
     pub fn tick(&mut self, cycles: u8) {
@@ -66,11 +66,19 @@ impl Bus {
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             0xE000..=0xFDFF => {
-                std::panic::panic_any("Not Usable	Nintendo says use of this area is prohibited.");
+                return 0x00;
+                std::panic!(
+                    "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
+                    addr
+                );
             }
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize],
             0xFEA0..=0xFEFF => {
-                std::panic::panic_any("Not Usable	Nintendo says use of this area is prohibited.")
+                return 0x00;
+                std::panic!(
+                    "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
+                    addr
+                );
             }
             0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
@@ -94,7 +102,6 @@ impl Bus {
             0x6000..=0x7FFF => {
                 println!("Banking Mode Select (Write Only): {:02x}", val);
             }
-            0x0000..=0x7FFF => {} // TODO : Implement MBC switch
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,

@@ -43,6 +43,9 @@ impl IOBridge {
     pub fn get_if(&self) -> u8 {
         self.interrupt_flag
     }
+    pub fn get_serial(&self) -> &Serial {
+        &self.serial
+    }
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {

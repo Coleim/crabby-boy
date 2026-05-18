@@ -1,8 +1,23 @@
 
-- [] Find a way to run any ROM (create an emulator class)
-- [] Map the serial to somehting and read the bus for the tests  
-- [] Create a UI to Run the Emulator ? 
-- [] Play sound
+[X] Find a way to run any ROM (create an emulator class)
+[X] Map the serial to somehting and rea the bus for the tests  
+
+[] Create tests to run roms
+[] Implementer et tourner les tests suivants
+    ## `mem_timing` puis `mem_timing-2` — **Timing des accès mémoire**
+    ## `halt_bug.gb` — **Bug HALT**
+    ## `interrupt_time` — **Timing des interruptions**
+
+[] Faire le PPU minimal (compter les cycles)
+[] Faire l'APU minimal ? 
+
+<!-- ## 6. `dmg_sound` — **Audio (DMG)** -->
+<!-- ## 8. `oam_bug` — **Bug OAM** -->
+
+
+[] Play sound
+
+[] Create a UI to Run the Emulator ? 
 
 
 
