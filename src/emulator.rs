@@ -47,18 +47,12 @@ impl CrabbyBoy {
             }
 
             if cpu.stopped {
-                println!(
-                    "EXECUTE PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
-                    cpu.pc,
-                    bus.read(cpu.pc),
-                    cpu.sp
-                );
                 println!("CPU STOPPED. Waiting interrupts");
                 // CPU does nothing until an interrupt or button press wakes it
                 break;
             }
             if cpu.halt {
-                bus.tick(4);
+                bus.internal_tick();
                 let ie = bus.get_ie();
                 let if_flag = bus.get_io().get_if();
                 if (ie & if_flag) != 0 {
@@ -68,15 +62,8 @@ impl CrabbyBoy {
                 continue;
             }
 
-            match cpu.execute(&mut bus) {
-                Some(tick) => {
-                    bus.tick(tick);
-                    cpu.handle_interrupts(&mut bus);
-                }
-                None => {
-                    panic!(" Error in getting the cycles ");
-                }
-            }
+            cpu.execute(&mut bus);
+            cpu.handle_interrupts(&mut bus);
         }
 
         Ok(())

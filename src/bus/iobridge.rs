@@ -31,8 +31,8 @@ impl IOBridge {
         }
     }
 
-    pub fn tick(&mut self, cycles: u8) {
-        if self.timer.tick(cycles) {
+    pub fn tick(&mut self) {
+        if self.timer.tick() {
             self.interrupt_flag |= 0b0000_0100;
         }
     }

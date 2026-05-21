@@ -40,9 +40,7 @@ impl Bus {
             bank_number: 1,
         }
     }
-    pub fn tick(&mut self, cycles: u8) {
-        self.io.tick(cycles);
-    }
+
     pub fn get_rom(&self) -> &Vec<u8> {
         &self.rom
     }
@@ -55,7 +53,23 @@ impl Bus {
     pub fn get_ie(&self) -> u8 {
         self.ie
     }
-    pub fn read(&self, addr: u16) -> u8 {
+
+    pub fn internal_tick(&mut self) {
+        self.io.tick();
+    }
+
+    pub fn read(&mut self, addr: u16) -> u8 {
+        let val = self._read(addr);
+        self.internal_tick();
+        val
+    }
+
+    pub fn write(&mut self, addr: u16, val: u8) {
+        self._write(addr, val);
+        self.internal_tick();
+    }
+
+    fn _read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x3FFF => self.rom[addr as usize], // Banking 0
             0x4000..=0x7FFF => {
@@ -86,8 +100,7 @@ impl Bus {
         }
     }
 
-    pub fn write(&mut self, addr: u16, val: u8) {
-        //TODO: https://doc.rust-lang.org/rust-by-example/conversion/from_into.html
+    fn _write(&mut self, addr: u16, val: u8) {
         match addr {
             0x0000..=0x1FFF => {
                 println!("RAM Enable (Write Only)");

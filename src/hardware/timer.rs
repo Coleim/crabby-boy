@@ -6,6 +6,7 @@ pub struct Timer {
 }
 
 impl Timer {
+    const CYCLES: u8 = 4;
     pub fn new() -> Self {
         Timer {
             internal_div: 0,
@@ -15,8 +16,8 @@ impl Timer {
         }
     }
 
-    pub fn tick(&mut self, cycles: u8) -> bool {
-        for _ in 0..cycles {
+    pub fn tick(&mut self) -> bool {
+        for _ in 0..Timer::CYCLES {
             let before = self.internal_div;
             self.internal_div = self.internal_div.wrapping_add(1);
             if self.tac & 0b0000_0100 != 0 {
@@ -26,7 +27,7 @@ impl Timer {
                     1 => 3,
                     2 => 5,
                     3 => 7,
-                    _ => panic!("Cannot tick {} cycles", cycles),
+                    _ => panic!("Cannot tick. clock_select: {} ", clock_select),
                 };
 
                 let was_set = (before >> bit) & 1 == 1;

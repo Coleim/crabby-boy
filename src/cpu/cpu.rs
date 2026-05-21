@@ -1,43 +1,5 @@
 use crate::Bus;
 
-const CYCLES: [u8; 256] = [
-    4, 12, 8, 8, 4, 4, 8, 4, 20, 8, 8, 8, 4, 4, 8, 4, // 0x00-0x0F
-    4, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, // 0x10-0x1F
-    12, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, // 0x20-0x2F
-    12, 12, 8, 8, 12, 12, 12, 4, 12, 8, 8, 8, 4, 4, 8, 4, // 0x30-0x3F
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x40-0x4F
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x50-0x5F
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x60-0x6F
-    8, 8, 8, 8, 8, 8, 4, 8, 4, 4, 4, 4, 4, 4, 8, 4, // 0x70-0x7F
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x80-0x8F
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0x90-0x9F
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0xA0-0xAF
-    4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, // 0xB0-0xBF
-    20, 12, 16, 16, 24, 16, 8, 16, 20, 16, 16, 4, 24, 24, 8, 16, // 0xC0-0xCF
-    20, 12, 16, 0, 24, 16, 8, 16, 20, 16, 16, 0, 24, 0, 8, 16, // 0xD0-0xDF
-    12, 12, 8, 0, 0, 16, 8, 16, 16, 4, 16, 0, 0, 0, 8, 16, // 0xE0-0xEF
-    12, 12, 8, 4, 0, 16, 8, 16, 12, 8, 16, 4, 0, 0, 8, 16, // 0xF0-0xFF
-];
-
-const CB_CYCLES: [u8; 256] = [
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x00-0x0F
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x10-0x1F
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x20-0x2F
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x30-0x3F
-    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x40-0x4F
-    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x50-0x5F
-    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x60-0x6F
-    8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, // 0x70-0x7F
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x80-0x8F
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0x90-0x9F
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xA0-0xAF
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xB0-0xBF
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xC0-0xCF
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xD0-0xDF
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xE0-0xEF
-    8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, // 0xF0-0xFF
-];
-
 pub struct CPU {
     pub a: u8,
     pub f: u8, // F = Z,N,H,C
@@ -119,7 +81,7 @@ impl CPU {
         self.f & 0x10 != 0
     }
 
-    fn read16bytes(&self, bus: &Bus, addr: u16) -> u16 {
+    fn read16bytes(&self, bus: &mut Bus, addr: u16) -> u16 {
         let low = bus.read(addr) as u16;
         let high = bus.read(addr.wrapping_add(1)) as u16;
         (high << 8) | low
@@ -183,6 +145,7 @@ impl CPU {
         self.push_to_stack(self.get_de(), bus);
     }
     fn push_to_stack(&mut self, reg: u16, bus: &mut Bus) {
+        bus.internal_tick();
         self.sp = self.sp.wrapping_sub(2);
         self.write16bytes(bus, self.sp, reg);
     }
@@ -266,57 +229,56 @@ impl CPU {
         result
     }
 
-    fn jump_relative_if(&self, bus: &Bus, addr: u16, condition: bool) -> (u16, u8) {
+    fn jump_relative_if(&self, bus: &mut Bus, addr: u16, condition: bool) -> u16 {
         let e8 = bus.read(addr) as i8;
         let mut new_addr = addr.wrapping_add(1);
-        let mut cycles = 8;
         if condition {
+            bus.internal_tick();
             new_addr = new_addr.wrapping_add_signed(e8 as i16);
-            cycles = 12;
         }
-        (new_addr, cycles)
+        new_addr
     }
 
-    fn jump_if(&self, bus: &Bus, addr: u16, condition: bool) -> (u16, u8) {
+    fn jump_if(&self, bus: &mut Bus, addr: u16, condition: bool) -> u16 {
         // JP a16 3  16 - - - -
         let a16 = self.read16bytes(bus, addr);
         let mut new_addr = addr.wrapping_add(2);
-        let mut cycles = 12;
         if condition {
+            bus.internal_tick();
             new_addr = a16;
-            cycles = 16;
         }
-        (new_addr, cycles)
+        new_addr
     }
 
     fn rst(&mut self, bus: &mut Bus, curr: u16, dest: u16) -> u16 {
+        bus.internal_tick();
         self.sp = self.sp.wrapping_sub(2);
         self.write16bytes(bus, self.sp, curr);
         dest
     }
 
-    fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> (u16, u8) {
+    fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> u16 {
         let ret = addr.wrapping_add(2); // Adresse de retour
-        // println!("CALL RET:0x{:04X} ADDR: 0x{:04X}", ret, addr);
         if condition {
+            bus.internal_tick();
             let n16 = self.read16bytes(bus, addr); // Adresse cible (du CALL)
             self.sp = self.sp.wrapping_sub(2); // Décrémenter SP pour empiler sur la stack
             self.write16bytes(bus, self.sp, ret); // Ecrire l'adresse de retour sur la stack
-            // println!("CALL n16: 0x{:04X} SP: 0x{:04X}", n16, self.sp);
-            (n16, 24) // Aller a l'adresse du CALL
+            n16
         } else {
-            (ret, 12)
+            ret
         }
     }
 
-    fn return_if(&mut self, condition: bool, bus: &mut Bus, current_pc: u16) -> (u16, u8) {
+    fn return_if(&mut self, condition: bool, bus: &mut Bus, current_pc: u16) -> u16 {
         if condition {
             // return from fonction call
             let n16 = self.read16bytes(bus, self.sp);
             self.sp = self.sp.wrapping_add(2);
-            (n16, 20)
+            bus.internal_tick();
+            n16
         } else {
-            (current_pc, 8)
+            current_pc
         }
     }
 
@@ -418,8 +380,7 @@ impl CPU {
         }
     }
 
-    // pub fn execute(&mut self, bus: &mut Bus) -> bool {
-    pub fn execute(&mut self, bus: &mut Bus) -> Option<u8> {
+    pub fn execute(&mut self, bus: &mut Bus) -> bool {
         // if self.sp < 0xDFF0 {
         //     println!("STACK DEEP: SP=0x{:04X} PC=0x{:04X}", self.sp, self.pc);
         // }
@@ -430,13 +391,7 @@ impl CPU {
         }
 
         let opcode: u8 = bus.read(self.pc);
-        let mut cycles: u8 = CYCLES[opcode as usize];
 
-        // println!(
-        //     "EXECUTE PC: 0x{:04X} OP: 0x{:02X} SP: 0x{:04X}",
-        //     self.pc, opcode, self.sp
-        // );
-        //
         let mut next_pc: u16 = if self.halt_bug {
             println!("HALT BUG  PC: {:02x}", self.pc);
             self.halt_bug = false;
@@ -470,10 +425,22 @@ impl CPU {
             }
 
             // INC
-            0x03 => self.set_bc(self.get_bc().wrapping_add(1)),
-            0x13 => self.set_de(self.get_de().wrapping_add(1)),
-            0x23 => self.set_hl(self.get_hl().wrapping_add(1)),
-            0x33 => self.sp = self.sp.wrapping_add(1), // INC SP 1  8
+            0x03 => {
+                bus.internal_tick();
+                self.set_bc(self.get_bc().wrapping_add(1));
+            }
+            0x13 => {
+                bus.internal_tick();
+                self.set_de(self.get_de().wrapping_add(1));
+            }
+            0x23 => {
+                bus.internal_tick();
+                self.set_hl(self.get_hl().wrapping_add(1));
+            }
+            0x33 => {
+                bus.internal_tick();
+                self.sp = self.sp.wrapping_add(1);
+            }
 
             0x04 => self.b = self.increment(self.b), // INC B 1  4 Z 0 H -
             0x14 => self.d = self.increment(self.d), // INC D 1  4 Z 0 H -
@@ -500,10 +467,22 @@ impl CPU {
                 bus.write(self.get_hl(), val);
             }
 
-            0x0B => self.set_bc(self.get_bc().wrapping_sub(1)),
-            0x1B => self.set_de(self.get_de().wrapping_sub(1)),
-            0x2B => self.set_hl(self.get_hl().wrapping_sub(1)),
-            0x3B => self.sp = self.sp.wrapping_sub(1),
+            0x0B => {
+                bus.internal_tick();
+                self.set_bc(self.get_bc().wrapping_sub(1));
+            }
+            0x1B => {
+                bus.internal_tick();
+                self.set_de(self.get_de().wrapping_sub(1));
+            }
+            0x2B => {
+                bus.internal_tick();
+                self.set_hl(self.get_hl().wrapping_sub(1));
+            }
+            0x3B => {
+                bus.internal_tick();
+                self.sp = self.sp.wrapping_sub(1);
+            }
 
             0x0D => self.c = self.decrement(self.c),
             0x1D => self.e = self.decrement(self.e),
@@ -529,7 +508,8 @@ impl CPU {
                 next_pc = next_pc.wrapping_add(1);
             }
             0x36 => {
-                bus.write(self.get_hl(), bus.read(next_pc));
+                let n8 = bus.read(next_pc);
+                bus.write(self.get_hl(), n8);
                 next_pc = next_pc.wrapping_add(1);
             }
 
@@ -568,10 +548,14 @@ impl CPU {
                 let s8 = byte as i8;
                 self.set_h((self.sp & 0xF) + (byte as u16 & 0xF) > 0xF);
                 self.set_c((self.sp & 0xFF) + (byte as u16) > 0xFF);
+                bus.internal_tick();
                 self.set_hl(self.sp.wrapping_add_signed(s8 as i16));
                 next_pc = next_pc.wrapping_add(1);
             }
-            0xF9 => self.sp = self.get_hl(),
+            0xF9 => {
+                bus.internal_tick();
+                self.sp = self.get_hl();
+            }
 
             0x0A => self.a = bus.read(self.get_bc()),
             0x1A => self.a = bus.read(self.get_de()),
@@ -687,40 +671,52 @@ impl CPU {
             0x7F => {} // self.a = self.a,
 
             // Jumps relative
-            0x18 => (next_pc, _) = self.jump_relative_if(bus, next_pc, true),
-            0x20 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, !self.get_z()),
-            0x30 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, !self.get_c()),
-            0x28 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, self.get_z()),
-            0x38 => (next_pc, cycles) = self.jump_relative_if(bus, next_pc, self.get_c()),
+            0x18 => next_pc = self.jump_relative_if(bus, next_pc, true),
+            0x20 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_z()),
+            0x30 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_c()),
+            0x28 => next_pc = self.jump_relative_if(bus, next_pc, self.get_z()),
+            0x38 => next_pc = self.jump_relative_if(bus, next_pc, self.get_c()),
 
-            // Jump
-            0xC3 => (next_pc, _) = self.jump_if(bus, next_pc, true),
-            0xC2 => (next_pc, cycles) = self.jump_if(bus, next_pc, !self.get_z()),
-            0xD2 => (next_pc, cycles) = self.jump_if(bus, next_pc, !self.get_c()),
-            0xCA => (next_pc, cycles) = self.jump_if(bus, next_pc, self.get_z()),
-            0xDA => (next_pc, cycles) = self.jump_if(bus, next_pc, self.get_c()),
+            // Jum
+            0xC3 => next_pc = self.jump_if(bus, next_pc, true),
+            0xC2 => next_pc = self.jump_if(bus, next_pc, !self.get_z()),
+            0xD2 => next_pc = self.jump_if(bus, next_pc, !self.get_c()),
+            0xCA => next_pc = self.jump_if(bus, next_pc, self.get_z()),
+            0xDA => next_pc = self.jump_if(bus, next_pc, self.get_c()),
             0xE9 => next_pc = self.get_hl(),
 
             0xF3 => self.ime = false,
             0xFB => self.ime_pending = true,
 
             // CALL
-            0xC4 => (next_pc, cycles) = self.call_if(!self.get_z(), bus, next_pc),
-            0xD4 => (next_pc, cycles) = self.call_if(!self.get_c(), bus, next_pc),
-            0xCC => (next_pc, cycles) = self.call_if(self.get_z(), bus, next_pc),
-            0xDC => (next_pc, cycles) = self.call_if(self.get_c(), bus, next_pc),
-            0xCD => (next_pc, _) = self.call_if(true, bus, next_pc),
+            0xC4 => next_pc = self.call_if(!self.get_z(), bus, next_pc),
+            0xD4 => next_pc = self.call_if(!self.get_c(), bus, next_pc),
+            0xCC => next_pc = self.call_if(self.get_z(), bus, next_pc),
+            0xDC => next_pc = self.call_if(self.get_c(), bus, next_pc),
+            0xCD => next_pc = self.call_if(true, bus, next_pc),
 
             // RET
-            0xC0 => (next_pc, cycles) = self.return_if(!self.get_z(), bus, next_pc),
-            0xD0 => (next_pc, cycles) = self.return_if(!self.get_c(), bus, next_pc),
-            0xC8 => (next_pc, cycles) = self.return_if(self.get_z(), bus, next_pc),
-            0xD8 => (next_pc, cycles) = self.return_if(self.get_c(), bus, next_pc),
+            0xC0 => {
+                bus.internal_tick();
+                next_pc = self.return_if(!self.get_z(), bus, next_pc);
+            }
+            0xD0 => {
+                bus.internal_tick();
+                next_pc = self.return_if(!self.get_c(), bus, next_pc);
+            }
+            0xC8 => {
+                bus.internal_tick();
+                next_pc = self.return_if(self.get_z(), bus, next_pc);
+            }
+            0xD8 => {
+                bus.internal_tick();
+                next_pc = self.return_if(self.get_c(), bus, next_pc);
+            }
             0xD9 => {
-                (next_pc, _) = self.return_if(true, bus, next_pc);
+                next_pc = self.return_if(true, bus, next_pc);
                 self.ime = true;
             }
-            0xC9 => (next_pc, _) = self.return_if(true, bus, next_pc),
+            0xC9 => next_pc = self.return_if(true, bus, next_pc),
 
             // RST
             0xC7 => next_pc = self.rst(bus, next_pc, 0x00),
@@ -833,11 +829,22 @@ impl CPU {
                 next_pc = next_pc.wrapping_add(1);
             }
 
-            0x09 => self.add_16b_registers(self.get_hl(), self.get_bc(), Self::set_hl),
-            0x19 => self.add_16b_registers(self.get_hl(), self.get_de(), Self::set_hl),
-            0x29 => self.add_16b_registers(self.get_hl(), self.get_hl(), Self::set_hl),
-            0x39 => self.add_16b_registers(self.get_hl(), self.sp, Self::set_hl),
-
+            0x09 => {
+                bus.internal_tick();
+                self.add_16b_registers(self.get_hl(), self.get_bc(), Self::set_hl);
+            }
+            0x19 => {
+                bus.internal_tick();
+                self.add_16b_registers(self.get_hl(), self.get_de(), Self::set_hl);
+            }
+            0x29 => {
+                bus.internal_tick();
+                self.add_16b_registers(self.get_hl(), self.get_hl(), Self::set_hl);
+            }
+            0x39 => {
+                bus.internal_tick();
+                self.add_16b_registers(self.get_hl(), self.sp, Self::set_hl);
+            }
             0xE8 => {
                 let byte = bus.read(next_pc);
                 let s8 = byte as i8;
@@ -847,6 +854,8 @@ impl CPU {
                 self.set_n(false);
                 self.set_h((self.sp & 0xF) + (u8 & 0xF) > 0xF);
                 self.set_c((self.sp & 0xFF) + (u8 & 0xFF) > 0xFF);
+                bus.internal_tick();
+                bus.internal_tick();
                 self.sp = self.sp.wrapping_add_signed(s8 as i16);
             }
 
@@ -952,13 +961,13 @@ impl CPU {
                     "Unimplemented opcode: 0x{:02X} at PC: 0x{:04X}",
                     opcode, self.pc
                 );
-                return None;
+                return false;
             }
         }
 
         self.pc = next_pc;
 
-        return Some(cycles);
+        return true;
     }
 
     fn sla(&mut self, reg: u8, bus: &mut Bus) {
@@ -1017,7 +1026,7 @@ impl CPU {
         self.set_register(reg, new_reg, bus);
     }
 
-    fn get_register(&self, reg: u8, bus: &Bus) -> u8 {
+    fn get_register(&self, reg: u8, bus: &mut Bus) -> u8 {
         match reg {
             0 => self.b,
             1 => self.c,
@@ -1031,7 +1040,7 @@ impl CPU {
         }
     }
 
-    fn bit(&mut self, bit_index: u8, reg: u8, bus: &Bus) {
+    fn bit(&mut self, bit_index: u8, reg: u8, bus: &mut Bus) {
         let curr_reg = self.get_register(reg, bus);
         let bit = (curr_reg >> bit_index) & 0b00000001;
         self.set_n(false);
@@ -1066,17 +1075,13 @@ impl CPU {
             _ => panic!("Invalid register index: {}", reg),
         }
     }
-    fn execute_cb(&mut self, bus: &mut Bus, current_pc: u16) -> Option<u8> {
+    fn execute_cb(&mut self, bus: &mut Bus, current_pc: u16) -> bool {
         let opcode = bus.read(current_pc);
         let next_pc = current_pc.wrapping_add(1);
 
         let category: u8 = opcode >> 6; // 1100 0000 -> 0000 0011
         let subcategory: u8 = opcode >> 3 & 0b00000111; // 1111 1000 -> 0001 1111 -> 00000111
         let operand: u8 = opcode & 0b00000111; // 0000 0111 
-
-        // println!("category: {:02X}", category);
-        // println!("subcategory: {:02X}", subcategory);
-        // println!("operand {:02X}", operand);
 
         match category {
             0 => match subcategory {
@@ -1099,12 +1104,12 @@ impl CPU {
                     "Unimplemented opcode: 0xCB{:02X} at PC: 0x{:04X}",
                     opcode, self.pc
                 );
-                return None;
+                return false;
             }
         }
 
         // println!(" Going to addr: {:#x}", next_pc);
         self.pc = next_pc;
-        return Some(CB_CYCLES[opcode as usize]);
+        return true;
     }
 }
