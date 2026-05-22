@@ -4,6 +4,12 @@
 
 [X] Create tests to run roms
 [] Implementer et tourner les tests suivants
+
+
+exit prev pc 
+afficher l'eram en debug
+voir ce qu'il se passe apres pour fix les bugs
+
         ## `halt_bug.gb` — **Bug HALT**
     ## `interrupt_time` — **Timing des interruptions**
 
