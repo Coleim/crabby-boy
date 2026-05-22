@@ -118,8 +118,14 @@ impl Bus {
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
             0xA000..=0xBFFF => {
                 self.eram[(addr - 0xA000) as usize] = val;
-                if addr >= 0xA004 && val != 0 {
-                    print!("{}", val as char);
+
+                if self.eram[0] == 0x00 {
+                    let text: String = self.eram[4..]
+                        .iter()
+                        .take_while(|&&b| b != 0)
+                        .map(|&b| b as char)
+                        .collect();
+                    println!("{}", text);
                 }
             }
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
@@ -133,6 +139,10 @@ impl Bus {
             }
         }
     }
+    //
+    // pub fn read_eram_for_test(&self) -> Option<u8, String> {
+    //     if self.eram[1]
+    // }
 }
 
 // let rom_data = std::fs::read(file_path).unwrap();

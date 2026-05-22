@@ -60,7 +60,7 @@ impl APU {
             // 0xFF23 => self.nr44 = val,
             _ => {
                 println!("[AUDIO REG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-                std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");
+                // std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");
             }
         }
     }
