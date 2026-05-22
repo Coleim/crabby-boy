@@ -85,30 +85,27 @@ macro_rules! cpu_instr_test {
 mod tests {
     use super::*;
 
-    // cpu_instr_test!(test_01_special, "./tests/cpu_instrs/01-special.gb");
-    // cpu_instr_test!(test_02_interrupts, "./tests/cpu_instrs/02-interrupts.gb");
-    // cpu_instr_test!(test_03_op_sp_hl, "./tests/cpu_instrs/03-op_sp,hl.gb");
-    // cpu_instr_test!(test_04_op_r_imm, "./tests/cpu_instrs/04-op r,imm.gb");
-    // cpu_instr_test!(test_05_op_rp, "./tests/cpu_instrs/05-op rp.gb");
-    // cpu_instr_test!(test_06_ld_r_r, "./tests/cpu_instrs/06-ld r,r.gb");
-    // cpu_instr_test!(
-    //     test_07_jr_jp_call_ret_rst,
-    //     "./tests/cpu_instrs/07-jr,jp,call,ret,rst.gb"
-    // );
-    // cpu_instr_test!(test_08_misc_instrs, "./tests/cpu_instrs/08-misc instrs.gb");
-    // cpu_instr_test!(test_09_op_r_r, "./tests/cpu_instrs/09-op r,r.gb");
-    // cpu_instr_test!(test_10_bit_ops, "./tests/cpu_instrs/10-bit ops.gb");
-    // cpu_instr_test!(test_11_op_a_hl, "./tests/cpu_instrs/11-op a,(hl).gb");
-    //
-    // cpu_instr_test!(test_all_cpu_instrs, "./tests/cpu_instrs.gb");
-    //
-    // cpu_instr_test!(read_timing, "./tests/mem_timing/01-read_timing.gb");
-    // cpu_instr_test!(write_timing, "./tests/mem_timing/02-write_timing.gb");
-    // cpu_instr_test!(modify_timing, "./tests/mem_timing/03-modify_timing.gb");
-    // cpu_instr_test!(mem_timing, "./tests/mem_timing.gb");
+    cpu_instr_test!(test_01_special, "./tests/cpu_instrs/01-special.gb");
+    cpu_instr_test!(test_02_interrupts, "./tests/cpu_instrs/02-interrupts.gb");
+    cpu_instr_test!(test_03_op_sp_hl, "./tests/cpu_instrs/03-op_sp,hl.gb");
+    cpu_instr_test!(test_04_op_r_imm, "./tests/cpu_instrs/04-op r,imm.gb");
+    cpu_instr_test!(test_05_op_rp, "./tests/cpu_instrs/05-op rp.gb");
+    cpu_instr_test!(test_06_ld_r_r, "./tests/cpu_instrs/06-ld r,r.gb");
+    cpu_instr_test!(
+        test_07_jr_jp_call_ret_rst,
+        "./tests/cpu_instrs/07-jr,jp,call,ret,rst.gb"
+    );
+    cpu_instr_test!(test_08_misc_instrs, "./tests/cpu_instrs/08-misc instrs.gb");
+    cpu_instr_test!(test_09_op_r_r, "./tests/cpu_instrs/09-op r,r.gb");
+    cpu_instr_test!(test_10_bit_ops, "./tests/cpu_instrs/10-bit ops.gb");
+    cpu_instr_test!(test_11_op_a_hl, "./tests/cpu_instrs/11-op a,(hl).gb");
 
-    cpu_instr_test!(read_timing_2, "./tests/mem_timing-2/01-read_timing.gb");
-    cpu_instr_test!(write_timing_2, "./tests/mem_timing-2/02-write_timing.gb");
-    cpu_instr_test!(modify_timing_2, "./tests/mem_timing-2/03-modify_timing.gb");
-    // cpu_instr_test!(mem_timing_2, "./tests/mem_timing-2.gb");
+    cpu_instr_test!(test_all_cpu_instrs, "./tests/cpu_instrs.gb");
+
+    cpu_instr_test!(read_timing, "./tests/mem_timing/01-read_timing.gb");
+    cpu_instr_test!(write_timing, "./tests/mem_timing/02-write_timing.gb");
+    cpu_instr_test!(modify_timing, "./tests/mem_timing/03-modify_timing.gb");
+    cpu_instr_test!(mem_timing, "./tests/mem_timing.gb");
+
+    cpu_instr_test!(instr_timing, "./tests/instr_timing.gb");
 }

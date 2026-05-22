@@ -32,6 +32,8 @@ impl PPU {
         }
     }
 
+    pub fn tick(&mut self) {}
+
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcd_control,

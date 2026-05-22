@@ -9,7 +9,8 @@ use crate::emulator::CrabbyBoy;
 fn main() -> Result<(), String> {
     // let file_path = "./Tetris.gb";
     // let file_path = "./tests/halt_bug.gb";
-    let file_path = "./tests/mem_timing-2/01-read_timing.gb";
+    let file_path = "./tests/interrupt_time.gb";
+    // let file_path = "./tests/cpu_instrs.gb";
     // let file_path = "./tests/cpu_instrs/01-special.gb";
     // let file_path = "./tests/cpu_instrs/02-interrupts.gb";
     // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";

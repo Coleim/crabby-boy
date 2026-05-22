@@ -4,13 +4,7 @@
 
 [X] Create tests to run roms
 [] Implementer et tourner les tests suivants
-    ## `mem_timing` puis `mem_timing-2` — **Timing des accès mémoire**
-    no need for registering the cycles anymore
-    every bus write/read ticks 4 -> rename it to read_and_tick
-    some opcode got internal ticks 
-
-    https://gekkio.fi/
-    ## `halt_bug.gb` — **Bug HALT**
+        ## `halt_bug.gb` — **Bug HALT**
     ## `interrupt_time` — **Timing des interruptions**
 
 [] Faire le PPU minimal (compter les cycles)

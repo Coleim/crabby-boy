@@ -259,9 +259,9 @@ impl CPU {
 
     fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> u16 {
         let ret = addr.wrapping_add(2); // Adresse de retour
+        let n16 = self.read16bytes(bus, addr); // Adresse cible (du CALL)
         if condition {
             bus.internal_tick();
-            let n16 = self.read16bytes(bus, addr); // Adresse cible (du CALL)
             self.sp = self.sp.wrapping_sub(2); // Décrémenter SP pour empiler sur la stack
             self.write16bytes(bus, self.sp, ret); // Ecrire l'adresse de retour sur la stack
             n16

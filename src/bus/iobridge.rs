@@ -35,6 +35,8 @@ impl IOBridge {
         if self.timer.tick() {
             self.interrupt_flag |= 0b0000_0100;
         }
+        self.ppu.tick();
+        self.audio.tick();
     }
 
     pub fn clear_if(&mut self, if_bit: u8) {
