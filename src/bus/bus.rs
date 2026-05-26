@@ -145,6 +145,10 @@ impl Bus {
             }
         }
     }
+
+    pub fn get_eram(&self) -> &[u8] {
+        &self.eram
+    }
 }
 
 // let rom_data = std::fs::read(file_path).unwrap();

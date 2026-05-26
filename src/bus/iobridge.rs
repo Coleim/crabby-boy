@@ -47,7 +47,7 @@ impl IOBridge {
     pub fn get_if(&self) -> u8 {
         self.interrupt_flag
     }
-    #[cfg(test)]
+    // #[cfg(test)]
     pub fn get_serial(&self) -> &Serial {
         &self.serial
     }

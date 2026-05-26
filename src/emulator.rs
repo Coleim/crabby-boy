@@ -36,14 +36,6 @@ impl CrabbyBoy {
                         loop_count
                     ));
                 }
-                let serial_str =
-                    std::str::from_utf8(bus.get_io().get_serial().serial_output()).unwrap_or("");
-                if serial_str.contains("Passed") {
-                    return Ok(());
-                }
-                if serial_str.contains("Failed") {
-                    return Err(format!("Test ROM reported failure: {}", serial_str));
-                }
             }
 
             if cpu.stopped {
@@ -68,13 +60,51 @@ impl CrabbyBoy {
 
             // #[cfg(test)]
             if cpu.pc == prev_pc {
-                break;
+                // Check eram to verify test results
+                if self.check_test_results(&bus) {
+                    return Ok(());
+                } else {
+                    return Err("Test ROM reported failure".to_string());
+                }
             }
 
             cpu.handle_interrupts(&mut bus);
         }
 
         Ok(())
+    }
+
+    // #[cfg(test)]
+    fn check_test_results(&self, bus: &Bus) -> bool {
+        let serial_str =
+            std::str::from_utf8(bus.get_io().get_serial().serial_output()).unwrap_or("");
+        if serial_str.contains("Passed") {
+            return true;
+        }
+        if serial_str.contains("Failed") {
+            eprintln!("Test ROM reported failure: {}", serial_str);
+            return false;
+        }
+
+        let eram = bus.get_eram();
+
+        if eram[0] == 0x00 {
+            let text: String = eram[4..]
+                .iter()
+                .take_while(|&&b| b != 0)
+                .map(|&b| b as char)
+                .collect();
+            println!("{}", text);
+            if text.contains("Passed") {
+                return true;
+            }
+            if text.contains("Failed") {
+                eprintln!("Test ROM reported failure: {}", text);
+                return false;
+            }
+        }
+
+        false
     }
 }
 
@@ -124,4 +154,6 @@ mod tests {
     cpu_instr_test!(instr_timing, "./tests/instr_timing.gb");
 
     cpu_instr_test!(halt_bug, "./tests/halt_bug.gb");
+
+    cpu_instr_test!(interrupt_time, "./tests/interrupt_time.gb");
 }
