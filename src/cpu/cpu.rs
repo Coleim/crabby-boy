@@ -365,9 +365,16 @@ impl CPU {
         let mask = 1 << bit;
         bus.clear_if(mask);
         self.ime = false;
+
+        // 2 wait cycles are executed
+        bus.internal_tick();
+        bus.internal_tick();
+
         // Push current PC onto stack
         self.sp = self.sp.wrapping_sub(2);
         self.write16bytes(bus, self.sp, self.pc);
+
+        bus.internal_tick();
 
         // Jump to the corresponding vector address
         match bit {
