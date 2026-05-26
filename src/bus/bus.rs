@@ -80,19 +80,19 @@ impl Bus {
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             0xE000..=0xFDFF => {
-                return 0x00;
-                std::panic!(
+                println!(
                     "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
                     addr
                 );
+                return 0x00;
             }
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize],
             0xFEA0..=0xFEFF => {
-                return 0x00;
-                std::panic!(
+                println!(
                     "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
                     addr
                 );
+                return 0x00;
             }
             0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
@@ -139,10 +139,6 @@ impl Bus {
             }
         }
     }
-    //
-    // pub fn read_eram_for_test(&self) -> Option<u8, String> {
-    //     if self.eram[1]
-    // }
 }
 
 // let rom_data = std::fs::read(file_path).unwrap();

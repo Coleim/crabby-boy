@@ -58,7 +58,6 @@ impl CrabbyBoy {
                 if (ie & if_flag) != 0 {
                     cpu.halt = false;
                 }
-
                 continue;
             }
 

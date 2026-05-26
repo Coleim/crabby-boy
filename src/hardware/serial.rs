@@ -13,6 +13,7 @@ impl Serial {
         }
     }
 
+    #[cfg(test)]
     pub fn serial_output(&self) -> &Vec<u8> {
         &self.serial_output
     }

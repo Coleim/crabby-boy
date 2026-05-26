@@ -4,6 +4,7 @@ pub struct PPU {
     scx: u8,
     lcd_y_coord: u8, // FF44 — LY: LCD Y coordinate [read-only]
     bgp: u8,         // FF47 — BGP
+    dots: u16,       // T-cycle counter
 }
 
 // FF40 — LCDC: LCD control
@@ -29,10 +30,24 @@ impl PPU {
             scx: 0,
             lcd_y_coord: 0,
             bgp: 0,
+            dots: 0,
         }
     }
 
-    pub fn tick(&mut self) {}
+    pub fn tick(&mut self) -> bool {
+        self.dots += 4;
+        if self.dots >= 456 {
+            self.dots -= 456;
+            self.lcd_y_coord += 1;
+            if self.lcd_y_coord >= 154 {
+                self.lcd_y_coord = 0;
+            }
+            if self.lcd_y_coord == 144 {
+                return true;
+            }
+        }
+        false
+    }
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {

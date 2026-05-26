@@ -35,7 +35,9 @@ impl IOBridge {
         if self.timer.tick() {
             self.interrupt_flag |= 0b0000_0100;
         }
-        self.ppu.tick();
+        if self.ppu.tick() {
+            self.interrupt_flag |= 0b0000_0001;
+        }
         self.audio.tick();
     }
 
@@ -45,6 +47,7 @@ impl IOBridge {
     pub fn get_if(&self) -> u8 {
         self.interrupt_flag
     }
+    #[cfg(test)]
     pub fn get_serial(&self) -> &Serial {
         &self.serial
     }
@@ -54,7 +57,7 @@ impl IOBridge {
             0xFF00 => self.joypad.read(),
             0xFF01..=0xFF02 => self.serial.read(addr),
             0xFF04..=0xFF07 => self.timer.read(addr),
-            0xFF0F => self.interrupt_flag,
+            0xFF0F => self.interrupt_flag | 0b1110_000,
             0xFF10..=0xFF26 => self.audio.read(addr),
             0xFF40..=0xFF4B => self.ppu.read(addr),
             0xFF4D => 0xFF, // CGB only flag - we are on DMG
@@ -66,12 +69,11 @@ impl IOBridge {
     }
 
     pub fn write(&mut self, addr: u16, val: u8) {
-        // println!(" WRITE IO addr: {:02x}, val: {:02x}", addr, val);
         match addr {
             0xFF00 => self.joypad.write(val),
             0xFF01..=0xFF02 => self.serial.write(addr, val),
             0xFF04..=0xFF07 => self.timer.write(addr, val),
-            0xFF0F => self.interrupt_flag = val,
+            0xFF0F => self.interrupt_flag = val & 0b0001_1111, // We write only the 5 lower bits
             0xFF10..=0xFF26 => self.audio.write(addr, val),
             0xFF40..=0xFF4B => self.ppu.write(addr, val),
             0xFF4D => self.key1_spd = val,
