@@ -6,7 +6,7 @@
 [] Implementer et tourner les tests suivants
         ## `halt_bug.gb` — **Bug HALT**
 
-[] Faire le PPU minimal (compter les cycles)
+[X] Faire le PPU minimal (compter les cycles)
 [] Faire l'APU minimal ? 
 
 <!-- ## 6. `dmg_sound` — **Audio (DMG)** -->
@@ -36,6 +36,7 @@ while running:
 
 
 Affichage → pixels ou wgpu ou minifb
+ou macroquad
 Audio → cpal
 Input → winit
 

@@ -57,7 +57,7 @@ impl IOBridge {
             0xFF00 => self.joypad.read(),
             0xFF01..=0xFF02 => self.serial.read(addr),
             0xFF04..=0xFF07 => self.timer.read(addr),
-            0xFF0F => self.interrupt_flag | 0b1110_000,
+            0xFF0F => self.interrupt_flag | 0b1110_0000,
             0xFF10..=0xFF26 => self.audio.read(addr),
             0xFF40..=0xFF4B => self.ppu.read(addr),
             0xFF4D => 0xFF, // CGB only flag - we are on DMG

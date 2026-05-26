@@ -122,4 +122,6 @@ mod tests {
     cpu_instr_test!(mem_timing2, "./tests/mem_timing-2.gb");
 
     cpu_instr_test!(instr_timing, "./tests/instr_timing.gb");
+
+    cpu_instr_test!(halt_bug, "./tests/halt_bug.gb");
 }
