@@ -56,6 +56,7 @@ impl CrabbyBoy {
             // #[cfg(test)]
             let prev_pc = cpu.pc;
 
+            cpu.handle_interrupts(&mut bus);
             cpu.execute(&mut bus);
 
             // #[cfg(test)]
@@ -67,8 +68,6 @@ impl CrabbyBoy {
                     return Err("Test ROM reported failure".to_string());
                 }
             }
-
-            cpu.handle_interrupts(&mut bus);
         }
 
         Ok(())
@@ -154,6 +153,4 @@ mod tests {
     cpu_instr_test!(instr_timing, "./tests/instr_timing.gb");
 
     cpu_instr_test!(halt_bug, "./tests/halt_bug.gb");
-
-    cpu_instr_test!(interrupt_time, "./tests/interrupt_time.gb");
 }

@@ -1,3 +1,4 @@
+mod audio;
 mod bus;
 mod cpu;
 mod emulator;

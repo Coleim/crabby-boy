@@ -1,17 +1,11 @@
 
-[X] Find a way to run any ROM (create an emulator class)
-[X] Map the serial to somehting and rea the bus for the tests  
 
-[X] Create tests to run roms
-[] Implementer et tourner les tests suivants
-        ## `halt_bug.gb` — **Bug HALT**
-
-[X] Faire le PPU minimal (compter les cycles)
 [] Faire l'APU minimal ? 
 
 <!-- ## 6. `dmg_sound` — **Audio (DMG)** -->
 <!-- ## 8. `oam_bug` — **Bug OAM** -->
 
+[] PPU
 
 [] Play sound
 

@@ -1,12 +1,7 @@
-use crate::hardware::{apu::APU, joypad::Joypad, ppu::PPU, serial::Serial, timer::Timer};
-
-// IOHandler {
-//     apu: APU,
-//     ppu: PPU,
-//     timer: Timer,
-//     joypad: Joypad,
-//     interrupt_flag: u8
-// }
+use crate::{
+    audio::apu::APU,
+    hardware::{joypad::Joypad, ppu::PPU, serial::Serial, timer::Timer},
+};
 
 pub struct IOBridge {
     joypad: Joypad,
