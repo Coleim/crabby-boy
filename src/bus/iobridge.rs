@@ -1,5 +1,7 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{
-    audio::apu::APU,
+    audio::{apu::APU, audio_buffer::AudioBuffer},
     hardware::{joypad::Joypad, ppu::PPU, serial::Serial, timer::Timer},
 };
 
@@ -34,6 +36,10 @@ impl IOBridge {
             self.interrupt_flag |= 0b0000_0001;
         }
         self.audio.tick();
+    }
+
+    pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
+        self.audio.set_audio_buffer(buffer);
     }
 
     pub fn clear_if(&mut self, if_bit: u8) {

@@ -1,3 +1,7 @@
+use std::sync::{Arc, Mutex};
+
+use crate::audio::audio_buffer::AudioBuffer;
+use crate::audio::audio_output::AudioOutput;
 use crate::bus::bus::Bus;
 use crate::cpu::cpu::CPU;
 use crate::cpu::header::CartdrigeHeader;
@@ -5,6 +9,7 @@ use crate::cpu::header::CartdrigeHeader;
 pub struct CrabbyBoy {
     #[cfg(test)]
     test_max_loop: u32,
+    audio_output: Option<AudioOutput>,
 }
 
 impl CrabbyBoy {
@@ -12,6 +17,7 @@ impl CrabbyBoy {
         CrabbyBoy {
             #[cfg(test)]
             test_max_loop: 500_000_000,
+            audio_output: None,
         }
     }
 
@@ -19,6 +25,12 @@ impl CrabbyBoy {
         let rom_data: Vec<u8> = std::fs::read(file_path).unwrap();
         println!("ROM size: {} bytes", rom_data.len());
         let mut bus: Bus = Bus::new(rom_data);
+
+        let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
+        // Very important to play sound
+        self.audio_output = Some(AudioOutput::new(audio_buffer.clone()));
+        bus.set_audio_buffer(audio_buffer);
+
         let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());
         header.print();
         header.is_valid()?;

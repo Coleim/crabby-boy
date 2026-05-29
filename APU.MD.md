@@ -40,10 +40,32 @@
                               └──────────────┘
 ```
 
-Check if my folders are ok 
-Then how to share the audio buffer with the emulator (so with the APU)
-Then how to implement the thread within the emulator ? 
+---
 
+## Thread audio & partage du buffer
+
+### Le thread audio n'est pas un thread que tu spawn toi-même
+
+C'est **cpal** qui crée le thread en interne quand tu appelles `build_output_stream()`. Tu donnes un callback (closure), cpal l'appelle en boucle depuis son propre thread pour remplir le buffer de la carte son.
+
+### Comment partager le buffer
+
+```
+emulator.rs / run()
+   │
+   ├── audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)))
+   │        │                                    │
+   │        ▼ (.clone())                         ▼ (original ou .clone())
+   │   AudioOutput::new(buffer)           bus.set_audio_buffer(buffer)
+   │        │                                    │
+   │        ▼                                    ▼
+   │   cpal callback (pop)               IOBridge → APU (push)
+```
+
+- `Arc` = plusieurs propriétaires (émulateur + thread audio)
+- `Mutex` = un seul accède au buffer à la fois (pas de data race)
+- `.clone()` sur un Arc ne copie pas les données, juste le pointeur
+---
 
 audio
 
@@ -53,60 +75,6 @@ graphics ( UI )
 
 commands ( A/B start)
 
----
-
-## Step 1 — Ring Buffer
-
-**Fichier :** `src/hardware/audio_buffer.rs`
-
-Buffer circulaire partagé entre l'émulateur (producteur) et le thread audio (consommateur).
-
-
-
-**Partage thread-safe :** `Arc<Mutex<AudioBuffer>>` — l'émulateur et le callback cpal tiennent chacun un clone de l'Arc.
-
----
-
-## Step 2 — Audio Output (cpal)
-
-**Fichier :** `src/hardware/audio_output.rs`
-
-**Doc cpal :** https://docs.rs/cpal/latest/cpal/
-
-```rust
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::sync::{Arc, Mutex};
-
-pub struct AudioOutput {
-    _stream: cpal::Stream,  // doit rester vivant sinon l'audio s'arrête
-}
-
-impl AudioOutput {
-    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Self {
-        // 1. let host = cpal::default_host();
-        // 2. let device = host.default_output_device().unwrap();
-        // 3. Configurer : sample_rate = 44100, channels = 1, sample_format = F32
-        // 4. Construire le stream :
-        //    device.build_output_stream(
-        //        &config,
-        //        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-        //            let mut buf = buffer.lock().unwrap();
-        //            for sample in data.iter_mut() {
-        //                *sample = buf.pop();
-        //            }
-        //        },
-        //        |err| eprintln!("Audio error: {}", err),
-        //        None,  // timeout
-        //    )
-        // 5. stream.play().unwrap();
-        // 6. Retourner AudioOutput { _stream: stream }
-    }
-}
-```
-
-**Important :** Le `_stream` doit être stocké quelque part (dans `CrabbyBoy` ou en variable dans `main`). S'il est droppé, l'audio s'arrête.
-
----
 
 ## Step 3 — Channel 1 (Square Wave)
 
@@ -131,7 +99,6 @@ const DUTY_TABLE: [[u8; 8]; 4] = [
     [0, 1, 1, 1, 1, 1, 1, 0],  // 75%
 ];
 ```
-
 ### Pseudo-code du tick (appelé chaque 1 T-cycle, ou par groupe de 4)
 
 ```rust
@@ -215,19 +182,25 @@ fn tick(&mut self) {
 
 ## Step 5 — Brancher dans l'émulateur
 
-**Dans `main.rs` ou `CrabbyBoy::run()` :**
+**Dans `CrabbyBoy` :**
 
 ```rust
-// 1. Créer le buffer partagé
-let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
+pub struct CrabbyBoy {
+    audio_output: Option<AudioOutput>,
+}
 
-// 2. Démarrer le stream audio (garder _audio_output vivant !)
-let _audio_output = AudioOutput::new(audio_buffer.clone());
+pub fn run(&mut self, file_path: &str) -> Result<(), String> {
+    // 1. Créer le buffer partagé
+    let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
 
-// 3. Passer le buffer à l'APU
-bus.get_io_mut().get_apu_mut().set_audio_buffer(audio_buffer);
+    // 2. Démarrer le stream audio (stocké dans self pour rester vivant)
+    self.audio_output = Some(AudioOutput::new(audio_buffer.clone()));
 
-// 4. La boucle principale tourne normalement — l'APU push à chaque tick
+    // 3. Passer le buffer à l'APU via le bus
+    bus.set_audio_buffer(audio_buffer);
+
+    // 4. La boucle principale tourne normalement — l'APU push à chaque tick
+}
 ```
 
 ---

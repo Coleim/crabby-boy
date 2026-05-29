@@ -1,4 +1,9 @@
-use crate::bus::iobridge::IOBridge;
+use std::sync::{Arc, Mutex};
+
+use crate::{
+    audio::audio_buffer::{self, AudioBuffer},
+    bus::iobridge::IOBridge,
+};
 
 // Start	End	Description	Notes
 // 0000	3FFF	16 KiB ROM bank 00	From cartridge, usually a fixed bank
@@ -39,6 +44,10 @@ impl Bus {
             ie: 0,
             bank_number: 1,
         }
+    }
+
+    pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
+        self.io.set_audio_buffer(buffer);
     }
 
     pub fn get_rom(&self) -> &Vec<u8> {

@@ -16,6 +16,9 @@ impl AudioBuffer {
             capacity: capacity,
         }
     }
+    pub fn empty(&self) -> bool {
+        self.count == 0
+    }
 
     pub fn push(&mut self, sample: f32) {
         if self.count < self.capacity {
