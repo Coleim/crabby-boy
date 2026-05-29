@@ -34,7 +34,7 @@ impl AudioOutput {
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     let mut buf = buffer.lock().unwrap();
                     for sample in data.iter_mut() {
-                        *sample = if buf.empty() { buf.pop() } else { 0.0 }
+                        *sample = if !buf.empty() { buf.pop() } else { 0.0 }
                     }
                 },
                 // AudioOutput::write_silence::<f32>,
