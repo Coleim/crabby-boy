@@ -12,18 +12,11 @@ pub struct AudioOutput {
 
 // **Doc cpal :** https://docs.rs/cpal/latest/cpal/
 impl AudioOutput {
-    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Self {
+    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Option<Self> {
         let host = default_host();
-        let device = host
-            .default_output_device()
-            .expect("no output device available");
-        let mut supported_configs_range = device
-            .supported_output_configs()
-            .expect("error while querying configs");
-        let supported_config = supported_configs_range
-            .next()
-            .expect("no supported config?!")
-            .with_max_sample_rate();
+        let device = host.default_output_device()?;
+        let mut supported_configs_range = device.supported_output_configs().ok()?;
+        let supported_config = supported_configs_range.next()?.with_max_sample_rate();
 
         let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
 
@@ -41,9 +34,9 @@ impl AudioOutput {
                 err_fn,
                 None,
             )
-            .unwrap();
+            .ok()?;
 
-        stream.play().unwrap();
-        AudioOutput { _stream: stream }
+        stream.play().ok()?;
+        Some(AudioOutput { _stream: stream })
     }
 }

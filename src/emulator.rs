@@ -28,7 +28,7 @@ impl CrabbyBoy {
 
         let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
         // Very important to play sound
-        self.audio_output = Some(AudioOutput::new(audio_buffer.clone()));
+        self.audio_output = AudioOutput::new(audio_buffer.clone());
         bus.set_audio_buffer(audio_buffer);
 
         let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());
