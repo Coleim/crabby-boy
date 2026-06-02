@@ -1,9 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    audio::audio_buffer::{self, AudioBuffer},
-    bus::iobridge::IOBridge,
-};
+use crate::{audio::audio_buffer::AudioBuffer, bus::iobridge::IOBridge};
 
 // Start	End	Description	Notes
 // 0000	3FFF	16 KiB ROM bank 00	From cartridge, usually a fixed bank
@@ -141,10 +138,10 @@ impl Bus {
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,
             0xFEA0..=0xFEFF => {
-                println!(
-                    "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
-                    addr
-                );
+                // println!(
+                //     "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
+                //     addr
+                // );
             }
             0xFF00..=0xFF7F => self.io.write(addr, val),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = val,
