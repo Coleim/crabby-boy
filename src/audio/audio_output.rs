@@ -12,31 +12,34 @@ pub struct AudioOutput {
 
 // **Doc cpal :** https://docs.rs/cpal/latest/cpal/
 impl AudioOutput {
-    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Option<Self> {
+    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Option<(Self, u32)> {
         let host = default_host();
         let device = host.default_output_device()?;
-        let mut supported_configs_range = device.supported_output_configs().ok()?;
-        let supported_config = supported_configs_range.next()?.with_max_sample_rate();
+        let default_config = device.default_output_config().ok()?;
+        let sample_rate = default_config.sample_rate();
+        let channels = default_config.channels() as usize;
+        let config: cpal::StreamConfig = default_config.into();
 
         let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
 
-        // 3. Configurer : sample_rate = 44100, channels = 1, sample_format = F32
         let stream = device
             .build_output_stream(
-                &supported_config.into(),
+                &config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     let mut buf = buffer.lock().unwrap();
-                    for sample in data.iter_mut() {
-                        *sample = if !buf.empty() { buf.pop() } else { 0.0 }
+                    for frame in data.chunks_mut(channels) {
+                        let sample = if !buf.empty() { buf.pop() } else { 0.0 };
+                        for out in frame.iter_mut() {
+                            *out = sample;
+                        }
                     }
                 },
-                // AudioOutput::write_silence::<f32>,
                 err_fn,
                 None,
             )
             .ok()?;
 
         stream.play().ok()?;
-        Some(AudioOutput { _stream: stream })
+        Some((AudioOutput { _stream: stream }, sample_rate))
     }
 }

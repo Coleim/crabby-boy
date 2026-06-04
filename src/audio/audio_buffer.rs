@@ -20,6 +20,10 @@ impl AudioBuffer {
         self.count == 0
     }
 
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
     pub fn push(&mut self, sample: f32) {
         if self.count < self.capacity {
             self.data[self.write_pos] = sample;

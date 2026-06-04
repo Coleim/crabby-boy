@@ -29,16 +29,25 @@ impl Channel {
         self.initial_volume = (val & 0b1111_0000) >> 4; // bits 7-4
         self.env_dir = (val & 0b0000_1000) >> 3; // bit 3
         self.env_pace = val & 0b0000_0111; // bits 2-0
+        let dac_on = self.initial_volume != 0 || self.env_dir != 0;
+        if !dac_on {
+            self.enabled = false;
+        }
     }
     fn write_nr3(&mut self, val: u8) {
         self.period = (self.period & 0b111_0000_0000) | val as u16;
     }
     fn write_nr4(&mut self, val: u8) {
         self.period = (self.period & 0b000_1111_1111) | ((val as u16 & 0b111) << 8);
+        self.length_enabled = val & 0b0100_0000 != 0;
         if val & 0b1000_0000 != 0 {
             self.enabled = true;
+            if self.length_timer == 0 {
+                self.length_timer = 64;
+            }
             self.freq_timer = (2048 - self.period as u32) * 4;
             self.volume = self.initial_volume; // reset volume
+            self.env_timer = self.env_pace;
         }
     }
 }
@@ -47,6 +56,7 @@ pub struct APU {
     audio_buffer: Option<Arc<Mutex<AudioBuffer>>>,
     cycle_count: u32,
     tick_counter: f64,
+    ticks_per_sample: f64,
     is_on: bool,
     channel1: Channel,
     channel2: Channel,
@@ -54,10 +64,6 @@ pub struct APU {
 
 impl APU {
     const CPU_FREQ: u32 = 4_194_304;
-    const SAMPLE_RATE: u32 = 44_100;
-
-    // Tous les combien de T-cycles on capture un sample
-    const TICKS_PER_SAMPLE: f64 = APU::CPU_FREQ as f64 / APU::SAMPLE_RATE as f64;
 
     const DUTY_TABLE: [[u8; 8]; 4] = [
         [0, 0, 0, 0, 0, 0, 0, 1], // 00 → 12.5%
@@ -71,10 +77,15 @@ impl APU {
             audio_buffer: None,
             cycle_count: 0,
             tick_counter: 0.0,
+            ticks_per_sample: APU::CPU_FREQ as f64 / 44_100.0,
             is_on: false,
             channel1: Channel::default(),
             channel2: Channel::default(),
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sample_rate: u32) {
+        self.ticks_per_sample = APU::CPU_FREQ as f64 / sample_rate.max(1) as f64;
     }
 
     pub fn tick(&mut self) {
@@ -104,8 +115,8 @@ impl APU {
         // self.tick_channel4();
 
         self.tick_counter += 4.0; // accumulateur downsampling
-        if self.tick_counter >= APU::TICKS_PER_SAMPLE {
-            self.tick_counter -= APU::TICKS_PER_SAMPLE;
+        if self.tick_counter >= self.ticks_per_sample {
+            self.tick_counter -= self.ticks_per_sample;
             let sample = self.get_sample();
             if let Some(buffer) = &self.audio_buffer {
                 buffer.lock().unwrap().push(sample);
@@ -114,7 +125,7 @@ impl APU {
     }
 
     fn clock_envelope_all(&mut self) {
-        for ch in [&mut self.channel1] {
+        for ch in [&mut self.channel1, &mut self.channel2] {
             if ch.env_pace == 0 {
                 continue;
             }
@@ -141,18 +152,18 @@ impl APU {
     }
 
     fn clock_length_all(&mut self) {
-        for ch in [&mut self.channel1] {
+        for ch in [&mut self.channel1, &mut self.channel2] {
             if ch.length_enabled && ch.length_timer > 0 {
                 ch.length_timer = ch.length_timer.saturating_sub(1);
                 if ch.length_timer == 0 {
-                    ch.length_enabled = false;
+                    ch.enabled = false;
                 }
             }
         }
     }
 
     fn tick_channel1(&mut self) {
-        self.channel1.freq_timer = self.channel1.freq_timer.saturating_sub(1);
+        self.channel1.freq_timer = self.channel1.freq_timer.saturating_sub(4);
         if self.channel1.freq_timer == 0 {
             self.channel1.freq_timer = (2048 - self.channel1.period as u32) * 4;
             self.channel1.duty_pos = (self.channel1.duty_pos + 1) % 8;
@@ -160,7 +171,7 @@ impl APU {
     }
 
     fn tick_channel2(&mut self) {
-        self.channel2.freq_timer = self.channel2.freq_timer.saturating_sub(1);
+        self.channel2.freq_timer = self.channel2.freq_timer.saturating_sub(4);
         if self.channel2.freq_timer == 0 {
             self.channel2.freq_timer = (2048 - self.channel2.period as u32) * 4;
             self.channel2.duty_pos = (self.channel2.duty_pos + 1) % 8;
@@ -172,21 +183,20 @@ impl APU {
             return 0.0;
         }
 
-        if !self.channel1.enabled {
-            return 0.0;
-        }
-
-        if !self.channel2.enabled {
-            return 0.0;
-        }
-
         let mut sample = 0.0;
         let mut channels_active = 0.0;
 
         for channel in [&self.channel1, &self.channel2] {
+            if !channel.enabled {
+                continue;
+            }
             let duty = APU::DUTY_TABLE[channel.duty_cycle as usize][channel.duty_pos as usize];
             sample += duty as f32 * channel.volume as f32 / 15.0;
             channels_active += 1.0;
+        }
+
+        if channels_active == 0.0 {
+            return 0.0;
         }
 
         (sample / channels_active).clamp(-1.0, 1.0)
@@ -198,10 +208,20 @@ impl APU {
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            _ => {
-                println!("[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-                std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");
+            0xFF26 => {
+                let mut status = 0b0111_0000;
+                if self.is_on {
+                    status |= 0b1000_0000;
+                }
+                if self.channel1.enabled {
+                    status |= 0b0000_0001;
+                }
+                if self.channel2.enabled {
+                    status |= 0b0000_0010;
+                }
+                status
             }
+            _ => 0xFF,
         }
     }
 
