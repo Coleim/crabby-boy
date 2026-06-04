@@ -42,6 +42,10 @@ impl IOBridge {
         self.audio.set_audio_buffer(buffer);
     }
 
+    pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
+        self.audio.set_sample_rate(sample_rate);
+    }
+
     pub fn clear_if(&mut self, if_bit: u8) {
         self.interrupt_flag = self.interrupt_flag & !if_bit;
     }
