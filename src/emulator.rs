@@ -32,32 +32,36 @@ impl CrabbyBoy {
             self.audio_output = Some(output);
             bus.set_audio_sample_rate(sample_rate);
         }
-        let sync_buffer = audio_buffer.clone();
-        let audio_active = self.audio_output.is_some();
+        #[cfg(not(test))]
+        let sync_buffer = if self.audio_output.is_some() {
+            Some(audio_buffer.clone())
+        } else {
+            None
+        };
         bus.set_audio_buffer(audio_buffer);
 
         let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());
         header.print();
         header.is_valid()?;
-        // create cpu
-        let mut cpu: CPU = CPU::new();
+
+        let cpu: CPU = CPU::new();
+
         #[cfg(test)]
+        return self.run_headless(cpu, bus);
+
+        #[cfg(not(test))]
+        self.run_windowed(cpu, bus, sync_buffer)
+    }
+
+    #[cfg(test)]
+    fn run_headless(&mut self, mut cpu: CPU, mut bus: Bus) -> Result<(), String> {
         let mut loop_count: u32 = 0;
         loop {
-            #[cfg(test)]
-            {
-                loop_count = loop_count.wrapping_add(1);
-                if loop_count > self.test_max_loop {
-                    return Err(format!(
-                        "Infinite Loop. Reaching loop number: {}",
-                        loop_count
-                    ));
-                }
+            loop_count = loop_count.wrapping_add(1);
+            if loop_count > self.test_max_loop {
+                return Err(format!("Infinite Loop. Reaching loop number: {}", loop_count));
             }
-
             if cpu.stopped {
-                println!("CPU STOPPED. Waiting interrupts");
-                // CPU does nothing until an interrupt or button press wakes it
                 break;
             }
             if cpu.halt {
@@ -69,22 +73,10 @@ impl CrabbyBoy {
                 }
                 continue;
             }
-
-            // #[cfg(test)]
             let prev_pc = cpu.pc;
-
             cpu.handle_interrupts(&mut bus);
             cpu.execute(&mut bus);
-
-            if audio_active {
-                while sync_buffer.lock().unwrap().count() >= 6144 {
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-            }
-
-            // #[cfg(test)]
             if cpu.pc == prev_pc {
-                // Check eram to verify test results
                 if self.check_test_results(&bus) {
                     return Ok(());
                 } else {
@@ -92,11 +84,99 @@ impl CrabbyBoy {
                 }
             }
         }
+        Ok(())
+    }
+
+    #[cfg(not(test))]
+    fn run_windowed(
+        &mut self,
+        mut cpu: CPU,
+        mut bus: Bus,
+        sync_buffer: Option<Arc<Mutex<AudioBuffer>>>,
+    ) -> Result<(), String> {
+        use crate::hardware::joypad;
+        use minifb::{Key, Scale, Window, WindowOptions};
+
+        let mut window = Window::new(
+            "Crabby Boy",
+            160,
+            144,
+            WindowOptions { scale: Scale::X4, ..WindowOptions::default() },
+        )
+        .map_err(|e| e.to_string())?;
+        if sync_buffer.is_none() {
+            window.set_target_fps(60);
+        }
+
+        let mut framebuffer = vec![0u32; 160 * 144];
+
+        while window.is_open() && !window.is_key_down(Key::Escape) {
+            let mut pressed = 0u8;
+            if window.is_key_down(Key::Z) {
+                pressed |= joypad::BUTTON_A;
+            }
+            if window.is_key_down(Key::X) {
+                pressed |= joypad::BUTTON_B;
+            }
+            if window.is_key_down(Key::Backspace) {
+                pressed |= joypad::BUTTON_SELECT;
+            }
+            if window.is_key_down(Key::Enter) {
+                pressed |= joypad::BUTTON_START;
+            }
+            if window.is_key_down(Key::Right) {
+                pressed |= joypad::BUTTON_RIGHT;
+            }
+            if window.is_key_down(Key::Left) {
+                pressed |= joypad::BUTTON_LEFT;
+            }
+            if window.is_key_down(Key::Up) {
+                pressed |= joypad::BUTTON_UP;
+            }
+            if window.is_key_down(Key::Down) {
+                pressed |= joypad::BUTTON_DOWN;
+            }
+            bus.set_joypad(pressed);
+
+            loop {
+                if cpu.stopped {
+                    bus.internal_tick();
+                    let ie = bus.get_ie();
+                    let if_flag = bus.get_io().get_if();
+                    if (ie & if_flag) != 0 {
+                        cpu.stopped = false;
+                    }
+                } else if cpu.halt {
+                    bus.internal_tick();
+                    let ie = bus.get_ie();
+                    let if_flag = bus.get_io().get_if();
+                    if (ie & if_flag) != 0 {
+                        cpu.halt = false;
+                    }
+                } else {
+                    cpu.handle_interrupts(&mut bus);
+                    cpu.execute(&mut bus);
+                }
+                if let Some(buffer) = &sync_buffer {
+                    while buffer.lock().unwrap().count() >= 4096 {
+                        std::thread::sleep(std::time::Duration::from_micros(500));
+                    }
+                }
+                if bus.take_frame_ready() {
+                    break;
+                }
+            }
+
+            bus.render_background(&mut framebuffer);
+            window
+                .update_with_buffer(&framebuffer, 160, 144)
+                .map_err(|e| e.to_string())?;
+        }
 
         Ok(())
     }
 
-    // #[cfg(test)]
+    #[cfg(test)]
     fn check_test_results(&self, bus: &Bus) -> bool {
         let serial_str =
             std::str::from_utf8(bus.get_io().get_serial().serial_output()).unwrap_or("");

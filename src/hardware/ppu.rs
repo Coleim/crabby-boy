@@ -1,3 +1,5 @@
+const SHADES: [u32; 4] = [0x00E0F8D0, 0x0088C070, 0x00346856, 0x00081820];
+
 pub struct PPU {
     lcd_control: u8, // FF40 — LCDC: LCD control
     scy: u8,         // FF42–FF43 — SCY, SCX
@@ -49,6 +51,38 @@ impl PPU {
         false
     }
 
+    pub fn render_background(&self, vram: &[u8], framebuffer: &mut [u32]) {
+        if self.lcd_control & 0x80 == 0 {
+            framebuffer.fill(SHADES[0]);
+            return;
+        }
+        let map_base: u16 = if self.lcd_control & 0x08 != 0 { 0x9C00 } else { 0x9800 };
+        let unsigned_tiles = self.lcd_control & 0x10 != 0;
+        for screen_y in 0..144usize {
+            let bg_y = (screen_y as u8).wrapping_add(self.scy);
+            let tile_row = (bg_y / 8) as u16;
+            let line = (bg_y % 8) as u16;
+            for screen_x in 0..160usize {
+                let bg_x = (screen_x as u8).wrapping_add(self.scx);
+                let tile_col = (bg_x / 8) as u16;
+                let map_addr = map_base + tile_row * 32 + tile_col;
+                let tile_index = vram[(map_addr - 0x8000) as usize];
+                let tile_addr = if unsigned_tiles {
+                    0x8000 + tile_index as u16 * 16
+                } else {
+                    0x9000u16.wrapping_add((tile_index as i8 as i16 * 16) as u16)
+                };
+                let row_addr = (tile_addr + line * 2 - 0x8000) as usize;
+                let lo = vram[row_addr];
+                let hi = vram[row_addr + 1];
+                let bit = 7 - (bg_x % 8);
+                let color_id = (((hi >> bit) & 1) << 1) | ((lo >> bit) & 1);
+                let shade = (self.bgp >> (color_id * 2)) & 0x3;
+                framebuffer[screen_y * 160 + screen_x] = SHADES[shade as usize];
+            }
+        }
+    }
+
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcd_control,
@@ -56,10 +90,7 @@ impl PPU {
             0xFF43 => self.scx,
             0xFF44 => self.lcd_y_coord,
             0xFF47 => self.bgp,
-            _ => {
-                println!("[PPU] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-                0x00
-            }
+            _ => 0xFF,
         }
     }
 
@@ -70,12 +101,7 @@ impl PPU {
             0xFF43 => self.scx = val,
             0xFF44 => self.lcd_y_coord = val,
             0xFF47 => self.bgp = val,
-            _ => {
-                println!(
-                    "[PPU] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}, VAL: {:02X}",
-                    addr, val
-                )
-            }
+            _ => {}
         }
     }
 }

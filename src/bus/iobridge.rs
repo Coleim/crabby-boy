@@ -13,6 +13,7 @@ pub struct IOBridge {
     audio: APU,         // $FF10	$FF26	DMG	Audio
     ppu: PPU,           // $FF40 - $FF4B - LCD Control, Status, Position, Scrolling, and Palettes
     key1_spd: u8,       // KEY1/SPD (CGB Mode only): Prepare speed switch
+    frame_ready: bool,
 }
 
 impl IOBridge {
@@ -25,6 +26,7 @@ impl IOBridge {
             audio: APU::new(),
             ppu: PPU::new(),
             key1_spd: 0,
+            frame_ready: false,
         }
     }
 
@@ -34,8 +36,23 @@ impl IOBridge {
         }
         if self.ppu.tick() {
             self.interrupt_flag |= 0b0000_0001;
+            self.frame_ready = true;
         }
         self.audio.tick();
+    }
+
+    pub fn take_frame_ready(&mut self) -> bool {
+        let ready = self.frame_ready;
+        self.frame_ready = false;
+        ready
+    }
+
+    pub fn set_joypad(&mut self, pressed: u8) {
+        self.joypad.set_pressed(pressed);
+    }
+
+    pub fn render_background(&self, vram: &[u8], framebuffer: &mut [u32]) {
+        self.ppu.render_background(vram, framebuffer);
     }
 
     pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
@@ -52,7 +69,7 @@ impl IOBridge {
     pub fn get_if(&self) -> u8 {
         self.interrupt_flag
     }
-    // #[cfg(test)]
+    #[cfg(test)]
     pub fn get_serial(&self) -> &Serial {
         &self.serial
     }
@@ -66,10 +83,7 @@ impl IOBridge {
             0xFF10..=0xFF26 => self.audio.read(addr),
             0xFF40..=0xFF4B => self.ppu.read(addr),
             0xFF4D => 0xFF, // CGB only flag - we are on DMG
-            _ => {
-                println!("[IOREG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-                0x00
-            }
+            _ => 0xFF,
         }
     }
 
@@ -82,12 +96,7 @@ impl IOBridge {
             0xFF10..=0xFF26 => self.audio.write(addr, val),
             0xFF40..=0xFF4B => self.ppu.write(addr, val),
             0xFF4D => self.key1_spd = val,
-            _ => {
-                println!(
-                    "[IOREG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}, VAL: {:02X}",
-                    addr, val
-                )
-            }
+            _ => {}
         }
     }
 }

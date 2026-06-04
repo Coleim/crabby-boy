@@ -51,6 +51,18 @@ impl Bus {
         self.io.set_audio_sample_rate(sample_rate);
     }
 
+    pub fn take_frame_ready(&mut self) -> bool {
+        self.io.take_frame_ready()
+    }
+
+    pub fn set_joypad(&mut self, pressed: u8) {
+        self.io.set_joypad(pressed);
+    }
+
+    pub fn render_background(&self, framebuffer: &mut [u32]) {
+        self.io.render_background(&self.vram, framebuffer);
+    }
+
     pub fn get_rom(&self) -> &Vec<u8> {
         &self.rom
     }
@@ -89,21 +101,9 @@ impl Bus {
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
-            0xE000..=0xFDFF => {
-                println!(
-                    "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
-                    addr
-                );
-                return 0x00;
-            }
+            0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize],
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize],
-            0xFEA0..=0xFEFF => {
-                println!(
-                    "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
-                    addr
-                );
-                return 0x00;
-            }
+            0xFEA0..=0xFEFF => 0xFF,
             0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
             0xFFFF => self.ie,
@@ -112,19 +112,15 @@ impl Bus {
 
     fn _write(&mut self, addr: u16, val: u8) {
         match addr {
-            0x0000..=0x1FFF => {
-                println!("RAM Enable (Write Only)");
-            }
+            0x0000..=0x1FFF => {}
             0x2000..=0x3FFF => {
-                // Enable bank
-                self.bank_number = val & 0b0011111;
+                self.bank_number = val & 0b0001_1111;
                 if self.bank_number == 0 {
                     self.bank_number = 1;
                 }
             }
-            0x6000..=0x7FFF => {
-                println!("Banking Mode Select (Write Only): {:02x}", val);
-            }
+            0x4000..=0x5FFF => {}
+            0x6000..=0x7FFF => {}
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
             0xA000..=0xBFFF => {
                 self.eram[(addr - 0xA000) as usize] = val;
@@ -141,21 +137,21 @@ impl Bus {
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,
-            0xFEA0..=0xFEFF => {
-                // println!(
-                //     "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
-                //     addr
-                // );
+            0xFEA0..=0xFEFF => {}
+            0xFF46 => {
+                let src = (val as u16) << 8;
+                for i in 0..0xA0u16 {
+                    let byte = self._read(src + i);
+                    self.oam[i as usize] = byte;
+                }
             }
             0xFF00..=0xFF7F => self.io.write(addr, val),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = val,
             0xFFFF => self.ie = val,
-            _ => {
-                std::panic!("[BUS] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-            }
         }
     }
 
+    #[cfg(test)]
     pub fn get_eram(&self) -> &[u8] {
         &self.eram
     }

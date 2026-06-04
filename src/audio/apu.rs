@@ -184,22 +184,17 @@ impl APU {
         }
 
         let mut sample = 0.0;
-        let mut channels_active = 0.0;
 
         for channel in [&self.channel1, &self.channel2] {
             if !channel.enabled {
                 continue;
             }
             let duty = APU::DUTY_TABLE[channel.duty_cycle as usize][channel.duty_pos as usize];
-            sample += duty as f32 * channel.volume as f32 / 15.0;
-            channels_active += 1.0;
+            let amplitude = (duty as f32 * 2.0 - 1.0) * (channel.volume as f32 / 15.0);
+            sample += amplitude;
         }
 
-        if channels_active == 0.0 {
-            return 0.0;
-        }
-
-        (sample / channels_active).clamp(-1.0, 1.0)
+        (sample * 0.25).clamp(-1.0, 1.0)
     }
 
     pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
@@ -240,10 +235,7 @@ impl APU {
             0xFF17 => self.channel2.write_nr2(val),
             0xFF18 => self.channel2.write_nr3(val),
             0xFF19 => self.channel2.write_nr4(val),
-            _ => {
-                println!("[AUDIO REG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
-                // std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");
-            }
+            _ => {}
         }
     }
 }
