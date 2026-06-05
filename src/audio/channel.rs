@@ -57,9 +57,9 @@ impl Channel {
             if self.length_timer == 0 {
                 self.length_timer = self.initial_length_timer;
             }
-            self.freq_timer = (2048 - self.period as u32) * 4;
+            self.freq_timer = ((2048 - self.period as u32) * 4).max(1);
             self.volume = self.initial_volume; // reset volume
-            self.env_timer = if self.env_pace == 0 { 0 } else { self.env_pace }; // The volume envelope and sweep timers treat a period of 0 as 8.
+            self.env_timer = if self.env_pace == 0 { 8 } else { self.env_pace }; // The volume envelope and sweep timers treat a period of 0 as 8.
         }
     }
 }

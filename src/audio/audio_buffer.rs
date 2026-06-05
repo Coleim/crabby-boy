@@ -19,6 +19,9 @@ impl AudioBuffer {
     pub fn empty(&self) -> bool {
         self.count == 0
     }
+    pub fn count(&self) -> usize {
+        self.count
+    }
 
     pub fn push(&mut self, sample: f32) {
         self.data[self.write_pos] = sample;

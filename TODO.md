@@ -1,7 +1,7 @@
 
 
 [] Faire l'APU minimal 
-
+[] Joypad a faire 
 
 ## Les logs audio
 

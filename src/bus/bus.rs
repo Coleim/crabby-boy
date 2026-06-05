@@ -47,6 +47,10 @@ impl Bus {
         self.io.set_audio_buffer(buffer);
     }
 
+    pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
+        self.io.set_audio_sample_rate(sample_rate);
+    }
+
     pub fn get_rom(&self) -> &Vec<u8> {
         &self.rom
     }

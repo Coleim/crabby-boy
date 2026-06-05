@@ -27,9 +27,14 @@ impl CrabbyBoy {
         let mut bus: Bus = Bus::new(rom_data);
 
         let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
-        // Very important to play sound
-        self.audio_output = AudioOutput::new(audio_buffer.clone());
+        if let Some((output, sample_rate)) = AudioOutput::new(audio_buffer.clone()) {
+            // Very important to play sound
+            self.audio_output = Some(output);
+            bus.set_audio_sample_rate(sample_rate);
+        }
+        let sync_buffer = audio_buffer.clone();
         bus.set_audio_buffer(audio_buffer);
+        let audio_active = self.audio_output.is_some();
 
         let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());
         header.print();
@@ -70,6 +75,12 @@ impl CrabbyBoy {
 
             cpu.handle_interrupts(&mut bus);
             cpu.execute(&mut bus);
+
+            if audio_active {
+                while sync_buffer.lock().unwrap().count() >= 6144 {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
 
             // #[cfg(test)]
             if cpu.pc == prev_pc {

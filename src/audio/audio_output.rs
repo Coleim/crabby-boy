@@ -12,7 +12,7 @@ pub struct AudioOutput {
 
 // **Doc cpal :** https://docs.rs/cpal/latest/cpal/
 impl AudioOutput {
-    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Option<Self> {
+    pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Option<(Self, u32)> {
         let host = default_host();
         let device = host.default_output_device()?;
 
@@ -70,6 +70,6 @@ impl AudioOutput {
             .ok()?;
 
         stream.play().ok()?;
-        Some(AudioOutput { _stream: stream })
+        Some((AudioOutput { _stream: stream }, config.sample_rate))
     }
 }

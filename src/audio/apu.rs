@@ -1,7 +1,4 @@
-use std::{
-    os::linux::raw::stat,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use crate::audio::{audio_buffer::AudioBuffer, channel::Channel};
 
@@ -9,6 +6,7 @@ pub struct APU {
     audio_buffer: Option<Arc<Mutex<AudioBuffer>>>,
     cycle_count: u32,
     tick_counter: f64,
+    tick_per_sample: f64,
     is_on: bool,
     channel1: Channel,
     channel2: Channel,
@@ -18,10 +16,6 @@ pub struct APU {
 
 impl APU {
     const CPU_FREQ: u32 = 4_194_304;
-    const SAMPLE_RATE: u32 = 44_100;
-
-    // Tous les combien de T-cycles on capture un sample
-    const TICKS_PER_SAMPLE: f64 = APU::CPU_FREQ as f64 / APU::SAMPLE_RATE as f64;
 
     const DUTY_TABLE: [[u8; 8]; 4] = [
         [0, 0, 0, 0, 0, 0, 0, 1], // 00 → 12.5%
@@ -35,12 +29,17 @@ impl APU {
             audio_buffer: None,
             cycle_count: 0,
             tick_counter: 0.0,
+            tick_per_sample: 0.0,
             is_on: false,
             channel1: Channel::default(),
             channel2: Channel::default(),
             nr50: 0,
             nr51: 0,
         }
+    }
+
+    pub fn set_sample_rate(&mut self, sample_rate: u32) {
+        self.tick_per_sample = APU::CPU_FREQ as f64 / sample_rate.max(1) as f64;
     }
 
     pub fn tick(&mut self) {
@@ -71,8 +70,8 @@ impl APU {
             // self.tick_channel4();
 
             self.tick_counter += 1.0; // accumulateur downsampling
-            if self.tick_counter >= APU::TICKS_PER_SAMPLE {
-                self.tick_counter -= APU::TICKS_PER_SAMPLE;
+            if self.tick_counter >= self.tick_per_sample {
+                self.tick_counter -= self.tick_per_sample;
                 let sample = self.get_sample();
                 if let Some(buffer) = &self.audio_buffer {
                     buffer.lock().unwrap().push(sample);

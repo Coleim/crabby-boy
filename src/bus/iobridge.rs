@@ -42,6 +42,10 @@ impl IOBridge {
         self.audio.set_audio_buffer(buffer);
     }
 
+    pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
+        self.audio.set_sample_rate(sample_rate);
+    }
+
     pub fn clear_if(&mut self, if_bit: u8) {
         self.interrupt_flag = self.interrupt_flag & !if_bit;
     }
@@ -59,7 +63,7 @@ impl IOBridge {
             0xFF01..=0xFF02 => self.serial.read(addr),
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupt_flag | 0b1110_0000,
-            0xFF10..=0xFF26 => self.audio.read(addr),
+            0xFF10..=0xFF3F => self.audio.read(addr),
             0xFF40..=0xFF4B => self.ppu.read(addr),
             0xFF4D => 0xFF, // CGB only flag - we are on DMG
             _ => {
@@ -75,7 +79,7 @@ impl IOBridge {
             0xFF01..=0xFF02 => self.serial.write(addr, val),
             0xFF04..=0xFF07 => self.timer.write(addr, val),
             0xFF0F => self.interrupt_flag = val & 0b0001_1111, // We write only the 5 lower bits
-            0xFF10..=0xFF26 => self.audio.write(addr, val),
+            0xFF10..=0xFF3F => self.audio.write(addr, val),
             0xFF40..=0xFF4B => self.ppu.write(addr, val),
             0xFF4D => self.key1_spd = val,
             _ => {
