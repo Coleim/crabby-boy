@@ -79,8 +79,8 @@ impl Bus {
         match addr {
             0x0000..=0x3FFF => self.rom[addr as usize], // Banking 0
             0x4000..=0x7FFF => {
-                let offset: u16 = self.bank_number as u16 * 0x4000;
-                self.rom[(offset + (addr - 0x4000)) as usize]
+                let offset: usize = self.bank_number as usize * 0x4000;
+                self.rom[(offset + (addr - 0x4000) as usize) as usize]
             }
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
@@ -109,7 +109,7 @@ impl Bus {
     fn _write(&mut self, addr: u16, val: u8) {
         match addr {
             0x0000..=0x1FFF => {
-                println!("RAM Enable (Write Only)");
+                // println!("RAM Enable (Write Only)");
             }
             0x2000..=0x3FFF => {
                 // Enable bank

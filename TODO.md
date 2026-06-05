@@ -5,15 +5,21 @@
 
 ## Les logs audio
 
-Les manquants importants pour entendre quelque chose :
 
-| Adresse | Registre | Priorité |
-|---|---|---|
-| `FF26` | NR52 | **CRITIQUE** — master on/off, sans ça tout est silencieux |
-| `FF25` | NR51 | **CRITIQUE** — panning, quel channel va à gauche/droite |
-| `FF24` | NR50 | **CRITIQUE** — master volume |
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF14
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF19
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF1E
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF23
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF14
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF19
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF1E
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF23
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF14
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF19
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF1E
+[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: FF23
 
-Implémente ces 5 là en priorité, surtout `FF26` et `FF19` (trigger CH2).
+
 
 
 <!-- ## 6. `dmg_sound` — **Audio (DMG)** -->

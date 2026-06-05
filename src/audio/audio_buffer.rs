@@ -21,10 +21,12 @@ impl AudioBuffer {
     }
 
     pub fn push(&mut self, sample: f32) {
+        self.data[self.write_pos] = sample;
+        self.write_pos = (self.write_pos + 1) % self.capacity;
         if self.count < self.capacity {
-            self.data[self.write_pos] = sample;
-            self.write_pos = (self.write_pos + 1) % self.capacity;
             self.count += 1;
+        } else {
+            self.read_pos = self.write_pos;
         }
     }
 
@@ -84,12 +86,11 @@ mod tests {
     }
 
     #[test]
-    fn push_beyond_capacity_is_silently_dropped() {
+    fn push_beyond_capacity_override_value() {
         let mut buf = AudioBuffer::new(3);
-        push_many(&mut buf, &[1.0, 2.0, 3.0, 99.0]); // 4th sample must be dropped
+        push_many(&mut buf, &[1.0, 2.0, 3.0, 99.0]); // 4th sample must override 1.0
         assert_eq!(buf.count, 3);
-        // Original three samples arrive intact; 99.0 never entered
-        assert_eq!(pop_all(&mut buf, 3), vec![1.0, 2.0, 3.0]);
+        assert_eq!(pop_all(&mut buf, 3), vec![2.0, 3.0, 99.0]);
     }
 
     #[test]
@@ -146,8 +147,8 @@ mod tests {
     fn capacity_one_works_as_single_slot() {
         let mut buf = AudioBuffer::new(1);
         buf.push(7.0);
-        buf.push(8.0); // must be dropped — buffer is full
-        assert_eq!(buf.pop(), 7.0);
+        buf.push(8.0); // must override
+        assert_eq!(buf.pop(), 8.0);
         assert_eq!(buf.pop(), 0.0); // empty again
     }
 

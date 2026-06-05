@@ -57,7 +57,7 @@ impl PPU {
             0xFF44 => self.lcd_y_coord,
             0xFF47 => self.bgp,
             _ => {
-                println!("[PPU] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
+                // println!("[PPU] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
                 0x00
             }
         }
@@ -71,10 +71,10 @@ impl PPU {
             0xFF44 => self.lcd_y_coord = val,
             0xFF47 => self.bgp = val,
             _ => {
-                println!(
-                    "[PPU] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}, VAL: {:02X}",
-                    addr, val
-                )
+                // println!(
+                //     "[PPU] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}, VAL: {:02X}",
+                //     addr, val
+                // )
             }
         }
     }

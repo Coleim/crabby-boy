@@ -79,10 +79,10 @@ impl IOBridge {
             0xFF40..=0xFF4B => self.ppu.write(addr, val),
             0xFF4D => self.key1_spd = val,
             _ => {
-                println!(
-                    "[IOREG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}, VAL: {:02X}",
-                    addr, val
-                )
+                // println!(
+                //     "[IOREG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}, VAL: {:02X}",
+                //     addr, val
+                // )
             }
         }
     }
