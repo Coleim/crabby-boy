@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::audio::{audio_buffer::AudioBuffer, channel::Channel};
+use crate::audio::{audio_buffer::AudioBuffer, channel::Channel, wave_channel::WaveChannel};
 
 pub struct APU {
     audio_buffer: Option<Arc<Mutex<AudioBuffer>>>,
@@ -10,6 +10,7 @@ pub struct APU {
     is_on: bool,
     channel1: Channel,
     channel2: Channel,
+    channel3: WaveChannel,
     nr50: u8,
     nr51: u8,
 }
@@ -33,6 +34,7 @@ impl APU {
             is_on: false,
             channel1: Channel::default(),
             channel2: Channel::default(),
+            channel3: WaveChannel::default(),
             nr50: 0,
             nr51: 0,
         }
@@ -64,9 +66,10 @@ impl APU {
                 }
             }
 
-            self.tick_channel1();
-            self.tick_channel2();
-            // self.tick_channel3();
+            self.channel1.tick();
+            self.channel2.tick();
+            self.channel3.tick();
+
             // self.tick_channel4();
 
             self.tick_counter += 1.0; // accumulateur downsampling
@@ -131,21 +134,13 @@ impl APU {
                 }
             }
         }
-    }
 
-    fn tick_channel1(&mut self) {
-        self.channel1.freq_timer = self.channel1.freq_timer.saturating_sub(1);
-        if self.channel1.freq_timer == 0 {
-            self.channel1.freq_timer = (2048 - self.channel1.period as u32) * 4;
-            self.channel1.duty_pos = (self.channel1.duty_pos + 1) % 8;
-        }
-    }
-
-    fn tick_channel2(&mut self) {
-        self.channel2.freq_timer = self.channel2.freq_timer.saturating_sub(1);
-        if self.channel2.freq_timer == 0 {
-            self.channel2.freq_timer = (2048 - self.channel2.period as u32) * 4;
-            self.channel2.duty_pos = (self.channel2.duty_pos + 1) % 8;
+        let ch3 = &mut self.channel3;
+        if ch3.length_enabled && ch3.len_timer > 0 {
+            ch3.len_timer = ch3.len_timer.saturating_sub(1);
+            if ch3.len_timer == 0 {
+                ch3.enabled = false;
+            }
         }
     }
 
@@ -163,6 +158,26 @@ impl APU {
             }
             let duty = APU::DUTY_TABLE[channel.duty_cycle as usize][channel.duty_pos as usize];
             sample += duty as f32 * channel.volume as f32 / 15.0;
+            channels_active += 1.0;
+        }
+
+        // CH3
+        if self.channel3.enabled && self.channel3.dac_enabled {
+            let byte = self.channel3.wave_ram[(self.channel3.wave_index / 2) as usize];
+            let nibble = if self.channel3.wave_index % 2 == 0 {
+                (byte >> 4) & 0xF
+            } else {
+                byte & 0xF
+            };
+            let shifted = nibble
+                >> match self.channel3.volume_level {
+                    0 => 4,
+                    1 => 0,
+                    2 => 1,
+                    3 => 2,
+                    _ => 4,
+                };
+            sample += shifted as f32 / 15.0;
             channels_active += 1.0;
         }
 
@@ -189,6 +204,9 @@ impl APU {
                 }
                 if self.channel2.enabled {
                     status |= 0b0000_0010;
+                }
+                if self.channel3.enabled {
+                    status |= 0b0000_0100;
                 }
                 status
             }
@@ -225,6 +243,17 @@ impl APU {
 
             0xFF25 => self.nr51,
             0xFF24 => self.nr50,
+
+            // Channel 3
+            0xFF1A => {
+                let mut status = 0b0111_1111; // bits 6-0 always 1
+                if self.channel3.dac_enabled {
+                    status |= 0b1000_0000;
+                }
+                status
+            }
+
+            0xFF30..=0xFF3F => self.channel3.read_wave_ram((addr - 0xFF30) as u8),
             _ => {
                 println!("[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
                 0xFF
@@ -240,6 +269,7 @@ impl APU {
                 if !self.is_on {
                     self.channel1.enabled = false;
                     self.channel2.enabled = false;
+                    self.channel3.enabled = false;
                 }
             }
             // Channel 1
@@ -255,6 +285,14 @@ impl APU {
             0xFF19 => self.channel2.write_nr4(val),
             0xFF25 => self.nr51 = val,
             0xFF24 => self.nr50 = val,
+            // Channel 3
+            0xFF1A => self.channel3.write_nr0(val),
+            0xFF1B => self.channel3.write_nr1(val),
+            0xFF1C => self.channel3.write_nr2(val),
+            0xFF1D => self.channel3.write_nr3(val),
+            0xFF1E => self.channel3.write_nr4(val),
+            // FF30–FF3F — Wave pattern RAM
+            0xFF30..=0xFF3F => self.channel3.write_wave_ram((addr - 0xFF30) as u8, val),
             _ => {
                 // println!("[AUDIO REG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
                 // std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");

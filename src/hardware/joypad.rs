@@ -8,6 +8,7 @@ impl Joypad {
     }
 
     pub fn read(&self) -> u8 {
+        // self.p1
         0xF
     }
 
