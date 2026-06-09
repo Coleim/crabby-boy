@@ -9,10 +9,10 @@ use crate::emulator::CrabbyBoy;
 
 fn main() -> Result<(), String> {
     // let file_path = "./tests/Tetris.gb";
-    let file_path = "./tests/Kirby.gb";
+    // let file_path = "./tests/Kirby.gb";
     // let file_path = "./tests/halt_bug.gb";
     // let file_path = "./tests/interrupt_time.gb";
-    // let file_path = "./tests/dmg_sound.gb";
+    let file_path = "./tests/dmg_sound.gb";
     // let file_path = "./tests/mem_timing-2/01-read_timing.gb";
     // let file_path = "./tests/mem_timing-2/02-write_timing.gb";
     // let file_path = "./tests/mem_timing-2.gb";

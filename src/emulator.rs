@@ -78,6 +78,7 @@ impl CrabbyBoy {
 
             if audio_active {
                 while sync_buffer.lock().unwrap().count() >= 6144 {
+                    // 6144 = nombre de sample minimal
                     std::thread::sleep(std::time::Duration::from_millis(1));
                 }
             }
