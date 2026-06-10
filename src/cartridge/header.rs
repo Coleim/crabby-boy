@@ -1,12 +1,10 @@
-use super::mappings::cartridge_type_map::CARTRIDGE_TYPE_MAP;
-use super::mappings::licensee_map::NEW_LICENSEE_MAP;
-use super::mappings::licensee_map::OLD_LICENSEE_MAP;
-use super::mappings::size_map::RAM_SIZE_MAP;
-use super::mappings::size_map::ROM_SIZE_MAP;
+use super::mappings::cartridge_type::CARTRIDGE_TYPE_MAP;
+use super::mappings::licensee::NEW_LICENSEE_MAP;
+use super::mappings::licensee::OLD_LICENSEE_MAP;
+use super::mappings::size::RAM_SIZE_MAP;
+use super::mappings::size::ROM_SIZE_MAP;
 
-// https://gbdev.io/pandocs/The_Cartridge_Header.html
-
-pub struct CartdrigeHeader {
+pub struct CartridgeHeader {
     entry_point: u8,
     nintendo_logo: [u8; 48],
     title: String,
@@ -15,17 +13,18 @@ pub struct CartdrigeHeader {
     licensee: String,
     sgb_flag: String,
     cartridge_type: String,
-    rom_size: String, // This byte indicates how much ROM is present on the cartridge. In most cases, the ROM size is given by 32 KiB × (1 << <value>):
+    rom_size: String,
     ram_size: String,
     destination_code: String,
     version_number: u8,
-    header_checksum: u8, // uint8_t checksum = 0; for (uint16_t address = 0x0134; address <= 0x014C; address++) { checksum = checksum - rom[address] - 1; }
-    global_checksum: u8,
+    header_checksum: u8,
+    header_checksum_ok: bool,
+    global_checksum: u16,
 }
 
-impl CartdrigeHeader {
+impl CartridgeHeader {
     pub fn new(rom: &[u8]) -> Self {
-        CartdrigeHeader {
+        CartridgeHeader {
             entry_point: 0,
             nintendo_logo: Self::read_nintendo_logo(rom),
             title: Self::parse_title(rom),
@@ -37,14 +36,23 @@ impl CartdrigeHeader {
             rom_size: Self::parse_rom_size(rom),
             ram_size: Self::parse_ram_size(rom),
             destination_code: Self::parse_destination_code(rom),
-            version_number: 0,
-            header_checksum: 0,
-            global_checksum: 0,
+            version_number: rom[0x014C],
+            header_checksum: rom[0x014D],
+            header_checksum_ok: Self::compute_header_checksum(rom) == rom[0x014D],
+            global_checksum: ((rom[0x014E] as u16) << 8) | rom[0x014F] as u16,
         }
     }
 
+    fn compute_header_checksum(rom: &[u8]) -> u8 {
+        let mut checksum: u8 = 0;
+        for addr in 0x0134..=0x014C {
+            checksum = checksum.wrapping_sub(rom[addr]).wrapping_sub(1);
+        }
+        checksum
+    }
+
     pub fn print(&self) {
-        println!("CartdrigeHeader {{");
+        println!("CartridgeHeader {{");
         println!("  entry_point: {}", self.entry_point);
         println!("  nintendo_logo: {}", self.logo_hex());
         println!("  title: {}", self.title);
@@ -57,8 +65,16 @@ impl CartdrigeHeader {
         println!("  ram_size: {}", self.ram_size);
         println!("  destination_code: {}", self.destination_code);
         println!("  version_number: {}", self.version_number);
-        println!("  header_checksum: {}", self.header_checksum);
-        println!("  global_checksum: {}", self.global_checksum);
+        println!(
+            "  header_checksum: 0x{:02X} ({})",
+            self.header_checksum,
+            if self.header_checksum_ok {
+                "valid"
+            } else {
+                "invalid"
+            }
+        );
+        println!("  global_checksum: 0x{:04X}", self.global_checksum);
         println!("}}");
     }
 

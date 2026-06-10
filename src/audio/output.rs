@@ -4,13 +4,12 @@ use cpal::{
 };
 use std::sync::{Arc, Mutex};
 
-use crate::audio::audio_buffer::AudioBuffer;
+use crate::audio::buffer::AudioBuffer;
 
 pub struct AudioOutput {
-    _stream: cpal::Stream, // doit rester vivant sinon l'audio s'arrête
+    _stream: cpal::Stream,
 }
 
-// **Doc cpal :** https://docs.rs/cpal/latest/cpal/
 impl AudioOutput {
     pub fn new(buffer: Arc<Mutex<AudioBuffer>>) -> Option<(Self, u32)> {
         let host = default_host();

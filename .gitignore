@@ -1,1 +1,7 @@
 /target
+/forge-out
+/.idea
+*.sav
+*.state
+*.shot*.ppm
+.DS_Store

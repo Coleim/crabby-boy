@@ -1,8 +1,9 @@
-use crate::Bus;
+use crate::bus::Bus;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct CPU {
     pub a: u8,
-    pub f: u8, // F = Z,N,H,C
+    pub f: u8,
     pub b: u8,
     pub c: u8,
     pub d: u8,
@@ -23,14 +24,14 @@ impl CPU {
         CPU {
             a: 0x01,
             f: 0xB0,
-            b: 0x00, // $00,
+            b: 0x00,
             c: 0x13,
             d: 0x00,
-            e: 0xD8,    // $D8
-            h: 0x01,    // $01
-            l: 0x4D,    // $4D
-            pc: 0x0100, // $0100
-            sp: 0xFFFE, // $FFFE
+            e: 0xD8,
+            h: 0x01,
+            l: 0x4D,
+            pc: 0x0100,
+            sp: 0xFFFE,
             stopped: false,
             halt: false,
             halt_bug: false,
@@ -144,10 +145,16 @@ impl CPU {
     fn push_de(&mut self, bus: &mut Bus) {
         self.push_to_stack(self.get_de(), bus);
     }
+    fn push_word(&mut self, bus: &mut Bus, value: u16) {
+        self.sp = self.sp.wrapping_sub(1);
+        bus.write(self.sp, (value >> 8) as u8);
+        self.sp = self.sp.wrapping_sub(1);
+        bus.write(self.sp, (value & 0xFF) as u8);
+    }
+
     fn push_to_stack(&mut self, reg: u16, bus: &mut Bus) {
         bus.internal_tick();
-        self.sp = self.sp.wrapping_sub(2);
-        self.write16bytes(bus, self.sp, reg);
+        self.push_word(bus, reg);
     }
 
     fn pop_hl(&mut self, bus: &mut Bus) {
@@ -240,7 +247,6 @@ impl CPU {
     }
 
     fn jump_if(&self, bus: &mut Bus, addr: u16, condition: bool) -> u16 {
-        // JP a16 3  16 - - - -
         let a16 = self.read16bytes(bus, addr);
         let mut new_addr = addr.wrapping_add(2);
         if condition {
@@ -252,18 +258,16 @@ impl CPU {
 
     fn rst(&mut self, bus: &mut Bus, curr: u16, dest: u16) -> u16 {
         bus.internal_tick();
-        self.sp = self.sp.wrapping_sub(2);
-        self.write16bytes(bus, self.sp, curr);
+        self.push_word(bus, curr);
         dest
     }
 
     fn call_if(&mut self, condition: bool, bus: &mut Bus, addr: u16) -> u16 {
-        let ret = addr.wrapping_add(2); // Adresse de retour
-        let n16 = self.read16bytes(bus, addr); // Adresse cible (du CALL)
+        let ret = addr.wrapping_add(2);
+        let n16 = self.read16bytes(bus, addr);
         if condition {
             bus.internal_tick();
-            self.sp = self.sp.wrapping_sub(2); // Décrémenter SP pour empiler sur la stack
-            self.write16bytes(bus, self.sp, ret); // Ecrire l'adresse de retour sur la stack
+            self.push_word(bus, ret);
             n16
         } else {
             ret
@@ -272,7 +276,6 @@ impl CPU {
 
     fn return_if(&mut self, condition: bool, bus: &mut Bus, current_pc: u16) -> u16 {
         if condition {
-            // return from fonction call
             let n16 = self.read16bytes(bus, self.sp);
             self.sp = self.sp.wrapping_add(2);
             bus.internal_tick();
@@ -299,9 +302,7 @@ impl CPU {
 
     fn sub_from_a(&mut self, val: u8, carry: u8) {
         self.set_n(true);
-        // SUB — half-carry if lower nibble would borrow
         self.set_h((self.a & 0xF) < (val & 0xF) + carry);
-        // SUB — carry if it would borrow
         self.set_c((self.a as u16) < (val as u16) + (carry as u16));
         self.a = self.a.wrapping_sub(val).wrapping_sub(carry);
         self.set_z(self.a == 0);
@@ -348,50 +349,38 @@ impl CPU {
     }
 
     pub fn handle_interrupts(&mut self, bus: &mut Bus) {
-        if self.ime == false {
+        if !self.ime {
             return;
         }
-        let ie = bus.get_ie();
-        let iflag = bus.get_io().get_if();
-
-        let triggered = ie & iflag;
-
-        if triggered == 0 {
+        if bus.get_ie() & bus.get_io().get_if() == 0 {
             return;
         }
 
-        let bit = triggered.trailing_zeros() as u8;
-        // Clear that bit in IF — mark it as handled
-        let mask = 1 << bit;
-        bus.clear_if(mask);
         self.ime = false;
-
-        // 2 wait cycles are executed
         bus.internal_tick();
         bus.internal_tick();
 
-        // Push current PC onto stack
-        self.sp = self.sp.wrapping_sub(2);
-        self.write16bytes(bus, self.sp, self.pc);
+        let pc = self.pc;
+        self.sp = self.sp.wrapping_sub(1);
+        bus.write(self.sp, (pc >> 8) as u8);
 
+        let triggered = bus.get_ie() & bus.get_io().get_if();
+        let vector = if triggered == 0 {
+            0x0000
+        } else {
+            let bit = triggered.trailing_zeros() as u8;
+            bus.clear_if(1 << bit);
+            0x0040 + (bit as u16) * 8
+        };
+
+        self.sp = self.sp.wrapping_sub(1);
+        bus.write(self.sp, (pc & 0xFF) as u8);
+
+        self.pc = vector;
         bus.internal_tick();
-
-        // Jump to the corresponding vector address
-        match bit {
-            0 => self.pc = 0x0040, // VBlank
-            1 => self.pc = 0x0048, // LCD STAT
-            2 => self.pc = 0x0050, // Timer
-            3 => self.pc = 0x0058, // Serial
-            4 => self.pc = 0x0060, // Joypad
-            _ => std::panic!("Unexpected interrupt {:02x}", bit),
-        }
     }
 
     pub fn execute(&mut self, bus: &mut Bus) -> bool {
-        // if self.sp < 0xDFF0 {
-        //     println!("STACK DEEP: SP=0x{:04X} PC=0x{:04X}", self.sp, self.pc);
-        // }
-
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
@@ -400,7 +389,6 @@ impl CPU {
         let opcode: u8 = bus.read(self.pc);
 
         let mut next_pc: u16 = if self.halt_bug {
-            println!("HALT BUG  PC: {:02x}", self.pc);
             self.halt_bug = false;
             self.pc
         } else {
@@ -408,9 +396,9 @@ impl CPU {
         };
 
         match opcode {
-            0x00 => {} // NOP 1  4
+            0x00 => {}
             0x10 => {
-                self.stopped = true; // STOP n8 2  4
+                self.stopped = true;
                 next_pc = next_pc.wrapping_add(1);
             }
             0x01 => next_pc = self.load_16_to(bus, next_pc, Self::set_bc),
@@ -431,7 +419,6 @@ impl CPU {
                 self.set_hl(hl.wrapping_sub(1));
             }
 
-            // INC
             0x03 => {
                 bus.internal_tick();
                 self.set_bc(self.get_bc().wrapping_add(1));
@@ -449,26 +436,23 @@ impl CPU {
                 self.sp = self.sp.wrapping_add(1);
             }
 
-            0x04 => self.b = self.increment(self.b), // INC B 1  4 Z 0 H -
-            0x14 => self.d = self.increment(self.d), // INC D 1  4 Z 0 H -
-            0x24 => self.h = self.increment(self.h), // INC D 1  4 Z 0 H -
+            0x04 => self.b = self.increment(self.b),
+            0x14 => self.d = self.increment(self.d),
+            0x24 => self.h = self.increment(self.h),
             0x34 => {
-                // INC [HL] 1  12 Z 0 H -
                 let mut val = bus.read(self.get_hl());
                 val = self.increment(val);
                 bus.write(self.get_hl(), val);
             }
-            0x0C => self.c = self.increment(self.c), // INC C 1  4 Z 0 H -
-            0x1C => self.e = self.increment(self.e), // INC E 1  4
-            0x2C => self.l = self.increment(self.l), // INC L 1  4
-            0x3C => self.a = self.increment(self.a), // INC A 1  4
+            0x0C => self.c = self.increment(self.c),
+            0x1C => self.e = self.increment(self.e),
+            0x2C => self.l = self.increment(self.l),
+            0x3C => self.a = self.increment(self.a),
 
-            // DEC
             0x05 => self.b = self.decrement(self.b),
             0x15 => self.d = self.decrement(self.d),
             0x25 => self.h = self.decrement(self.h),
             0x35 => {
-                // DEC [HL] 1  12 Z 1 H -
                 let mut val = bus.read(self.get_hl());
                 val = self.decrement(val);
                 bus.write(self.get_hl(), val);
@@ -496,7 +480,6 @@ impl CPU {
             0x2D => self.l = self.decrement(self.l),
             0x3D => self.a = self.decrement(self.a),
 
-            // LD
             0x06 => {
                 self.b = bus.read(next_pc);
                 next_pc = next_pc.wrapping_add(1);
@@ -577,17 +560,17 @@ impl CPU {
                 self.set_hl(hl.wrapping_sub(1));
             }
 
-            0x40 => {}               //self.b = self.b, // LD B, B 1  4
-            0x41 => self.b = self.c, // LD B, C 1  4
-            0x42 => self.b = self.d, // LD B, D 1  4
-            0x43 => self.b = self.e, // LD B, E 1  4
+            0x40 => {}
+            0x41 => self.b = self.c,
+            0x42 => self.b = self.d,
+            0x43 => self.b = self.e,
             0x44 => self.b = self.h,
             0x45 => self.b = self.l,
             0x46 => self.b = bus.read(self.get_hl()),
-            0x47 => self.b = self.a, // LD B, A 1  4
+            0x47 => self.b = self.a,
 
             0x48 => self.c = self.b,
-            0x49 => {} // self.c = self.c,
+            0x49 => {}
             0x4A => self.c = self.d,
             0x4B => self.c = self.e,
             0x4C => self.c = self.h,
@@ -597,7 +580,7 @@ impl CPU {
 
             0x50 => self.d = self.b,
             0x51 => self.d = self.c,
-            0x52 => {} // self.d = self.d,
+            0x52 => {}
             0x53 => self.d = self.e,
             0x54 => self.d = self.h,
             0x55 => self.d = self.l,
@@ -607,7 +590,7 @@ impl CPU {
             0x58 => self.e = self.b,
             0x59 => self.e = self.c,
             0x5A => self.e = self.d,
-            0x5B => {} // self.e = self.e,
+            0x5B => {}
             0x5C => self.e = self.h,
             0x5D => self.e = self.l,
             0x5E => self.e = bus.read(self.get_hl()),
@@ -617,7 +600,7 @@ impl CPU {
             0x61 => self.h = self.c,
             0x62 => self.h = self.d,
             0x63 => self.h = self.e,
-            0x64 => {} // self.h = self.h,
+            0x64 => {}
             0x65 => self.h = self.l,
             0x66 => self.h = bus.read(self.get_hl()),
             0x67 => self.h = self.a,
@@ -627,7 +610,7 @@ impl CPU {
             0x6A => self.l = self.d,
             0x6B => self.l = self.e,
             0x6C => self.l = self.h,
-            0x6D => {} // self.l = self.l,
+            0x6D => {}
             0x6E => self.l = bus.read(self.get_hl()),
             0x6F => self.l = self.a,
 
@@ -640,34 +623,14 @@ impl CPU {
             0x76 => {
                 let ie = bus.get_ie();
                 let if_flag = bus.get_io().get_if();
-                // println!(
-                //     "0x76 HALT → IME: {} IE: 0x{:02X} IF: 0x{:02X}",
-                //     self.ime, ie, if_flag
-                // );
                 if !self.ime && (ie & if_flag) != 0 {
-                    println!(
-                        "HALT BUG: F={:02X} PC={:04X} A={:02X} B={:02X} C={:02X} D={:02X} E={:02X}",
-                        self.f, self.pc, self.a, self.b, self.c, self.d, self.e
-                    );
-                    println!(
-                        "HALT BUG: IE={:02X} IF={:02X} F={:02X} PC={:04X}",
-                        ie, if_flag, self.f, self.pc
-                    );
-
                     self.halt_bug = true;
-                }
-
-                if !self.ime && (ie & if_flag) != 0 {
-                    // HALT BUG — don't halt, just corrupt next fetch
-                    self.halt_bug = true;
-                    // println!("HALT BUG TRIGGERED");
                 } else {
                     self.halt = true;
                 }
             }
             0x77 => bus.write(self.get_hl(), self.a),
 
-            // LD (HL),B
             0x78 => self.a = self.b,
             0x79 => self.a = self.c,
             0x7A => self.a = self.d,
@@ -675,16 +638,14 @@ impl CPU {
             0x7C => self.a = self.h,
             0x7D => self.a = self.l,
             0x7E => self.a = bus.read(self.get_hl()),
-            0x7F => {} // self.a = self.a,
+            0x7F => {}
 
-            // Jumps relative
             0x18 => next_pc = self.jump_relative_if(bus, next_pc, true),
             0x20 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_z()),
             0x30 => next_pc = self.jump_relative_if(bus, next_pc, !self.get_c()),
             0x28 => next_pc = self.jump_relative_if(bus, next_pc, self.get_z()),
             0x38 => next_pc = self.jump_relative_if(bus, next_pc, self.get_c()),
 
-            // Jum
             0xC3 => next_pc = self.jump_if(bus, next_pc, true),
             0xC2 => next_pc = self.jump_if(bus, next_pc, !self.get_z()),
             0xD2 => next_pc = self.jump_if(bus, next_pc, !self.get_c()),
@@ -695,14 +656,12 @@ impl CPU {
             0xF3 => self.ime = false,
             0xFB => self.ime_pending = true,
 
-            // CALL
             0xC4 => next_pc = self.call_if(!self.get_z(), bus, next_pc),
             0xD4 => next_pc = self.call_if(!self.get_c(), bus, next_pc),
             0xCC => next_pc = self.call_if(self.get_z(), bus, next_pc),
             0xDC => next_pc = self.call_if(self.get_c(), bus, next_pc),
             0xCD => next_pc = self.call_if(true, bus, next_pc),
 
-            // RET
             0xC0 => {
                 bus.internal_tick();
                 next_pc = self.return_if(!self.get_z(), bus, next_pc);
@@ -725,7 +684,6 @@ impl CPU {
             }
             0xC9 => next_pc = self.return_if(true, bus, next_pc),
 
-            // RST
             0xC7 => next_pc = self.rst(bus, next_pc, 0x00),
             0xD7 => next_pc = self.rst(bus, next_pc, 0x10),
             0xE7 => next_pc = self.rst(bus, next_pc, 0x20),
@@ -784,7 +742,6 @@ impl CPU {
                 next_pc = next_pc.wrapping_add(1);
             }
 
-            // Load High
             0xE0 => {
                 let a8 = bus.read(next_pc) as u16;
                 let dest_addr = 0xFF00 | a8;
@@ -806,7 +763,6 @@ impl CPU {
                 self.a = bus.read(src_addr);
             }
 
-            // CP
             0xB8 => self.cp(self.b),
             0xB9 => self.cp(self.c),
             0xBA => self.cp(self.d),
@@ -821,7 +777,6 @@ impl CPU {
                 self.cp(n8);
             }
 
-            // ADD
             0x80 => self.add_to_a(self.b, 0),
             0x81 => self.add_to_a(self.c, 0),
             0x82 => self.add_to_a(self.d, 0),
@@ -866,7 +821,6 @@ impl CPU {
                 self.sp = self.sp.wrapping_add_signed(s8 as i16);
             }
 
-            // ADC
             0x88 => self.add_to_a(self.b, self.get_c() as u8),
             0x89 => self.add_to_a(self.c, self.get_c() as u8),
             0x8A => self.add_to_a(self.d, self.get_c() as u8),
@@ -881,7 +835,6 @@ impl CPU {
                 next_pc = next_pc.wrapping_add(1);
             }
 
-            //SUB
             0x90 => self.sub_from_a(self.b, 0),
             0x91 => self.sub_from_a(self.c, 0),
             0x92 => self.sub_from_a(self.d, 0),
@@ -896,7 +849,6 @@ impl CPU {
                 next_pc = next_pc.wrapping_add(1);
             }
 
-            // SBC
             0x98 => self.sub_from_a(self.b, self.get_c() as u8),
             0x99 => self.sub_from_a(self.c, self.get_c() as u8),
             0x9A => self.sub_from_a(self.d, self.get_c() as u8),
@@ -913,32 +865,27 @@ impl CPU {
 
             0xCB => return self.execute_cb(bus, next_pc),
 
-            // Rotate
             0x07 => self.rlca(),
             0x17 => self.rla(),
             0x0F => self.rrca(),
             0x1F => self.rra(),
 
-            // CPL
             0x2F => {
                 self.a = !self.a;
                 self.set_n(true);
                 self.set_h(true);
             }
-            // CCF
             0x3F => {
                 self.set_c(!self.get_c());
                 self.set_n(false);
                 self.set_h(false);
             }
-            // SCF
             0x37 => {
                 self.set_c(true);
                 self.set_n(false);
                 self.set_h(false);
             }
 
-            // DAA
             0x27 => {
                 let mut adjustment = 0;
                 if self.get_n() {
@@ -1086,9 +1033,9 @@ impl CPU {
         let opcode = bus.read(current_pc);
         let next_pc = current_pc.wrapping_add(1);
 
-        let category: u8 = opcode >> 6; // 1100 0000 -> 0000 0011
-        let subcategory: u8 = opcode >> 3 & 0b00000111; // 1111 1000 -> 0001 1111 -> 00000111
-        let operand: u8 = opcode & 0b00000111; // 0000 0111 
+        let category: u8 = opcode >> 6;
+        let subcategory: u8 = opcode >> 3 & 0b00000111;
+        let operand: u8 = opcode & 0b00000111;
 
         match category {
             0 => match subcategory {
@@ -1115,7 +1062,6 @@ impl CPU {
             }
         }
 
-        // println!(" Going to addr: {:#x}", next_pc);
         self.pc = next_pc;
         return true;
     }

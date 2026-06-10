@@ -7,14 +7,20 @@ pub const BUTTON_LEFT: u8 = 1 << 5;
 pub const BUTTON_UP: u8 = 1 << 6;
 pub const BUTTON_DOWN: u8 = 1 << 7;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Joypad {
     select: u8,
     pressed: u8,
+    irq: bool,
 }
 
 impl Joypad {
     pub fn new() -> Self {
-        Joypad { select: 0x30, pressed: 0 }
+        Joypad {
+            select: 0x30,
+            pressed: 0,
+            irq: false,
+        }
     }
 
     pub fn read(&self) -> u8 {
@@ -33,6 +39,16 @@ impl Joypad {
     }
 
     pub fn set_pressed(&mut self, pressed: u8) {
+        let newly = pressed & !self.pressed;
+        if newly != 0 {
+            self.irq = true;
+        }
         self.pressed = pressed;
+    }
+
+    pub fn take_irq(&mut self) -> bool {
+        let irq = self.irq;
+        self.irq = false;
+        irq
     }
 }

@@ -1,9 +1,9 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-// Use &str as key type to support non-hex codes like "9H", "BL", "DK"
 pub static NEW_LICENSEE_MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut m = HashMap::new();
+    m.insert("CA", "CatAnnaDev");
     m.insert("00", "None");
     m.insert("01", "Nintendo Research & Development 1");
     m.insert("08", "Capcom");

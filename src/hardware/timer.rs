@@ -1,69 +1,112 @@
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Timer {
-    internal_div: u16, // The real 16-bit counter // FF04 — DIV: Divider register
-    tima: u8,          // FF05 — TIMA: Timer counter
-    tma: u8,           // FF06 — TMA: Timer modulo
-    tac: u8,           // FF07 — TAC: Timer control
+    div: u16,
+    tima: u8,
+    tma: u8,
+    tac: u8,
+    reload_pending: bool,
+    reload_delay: u8,
+    reloaded_this_cycle: bool,
 }
 
 impl Timer {
-    const CYCLES: u8 = 4;
     pub fn new() -> Self {
         Timer {
-            internal_div: 0,
+            div: 0xABCC,
             tima: 0,
             tma: 0,
-            tac: 0,
+            tac: 0xF8,
+            reload_pending: false,
+            reload_delay: 0,
+            reloaded_this_cycle: false,
+        }
+    }
+
+    fn select_bit(&self) -> u8 {
+        match self.tac & 0x03 {
+            0 => 9,
+            1 => 3,
+            2 => 5,
+            _ => 7,
+        }
+    }
+
+    fn timer_signal(&self) -> bool {
+        self.tac & 0x04 != 0 && (self.div >> self.select_bit()) & 1 != 0
+    }
+
+    fn inc_tima(&mut self) {
+        let (next, overflow) = self.tima.overflowing_add(1);
+        self.tima = next;
+        if overflow {
+            self.tima = 0;
+            self.reload_pending = true;
+            self.reload_delay = 4;
         }
     }
 
     pub fn tick(&mut self) -> bool {
-        for _ in 0..Timer::CYCLES {
-            let before = self.internal_div;
-            self.internal_div = self.internal_div.wrapping_add(1);
-            if self.tac & 0b0000_0100 != 0 {
-                let clock_select = self.tac & 0b0000_0011;
-                let bit = match clock_select {
-                    0 => 9,
-                    1 => 3,
-                    2 => 5,
-                    3 => 7,
-                    _ => panic!("Cannot tick. clock_select: {} ", clock_select),
-                };
-
-                let was_set = (before >> bit) & 1 == 1;
-                let is_set = (self.internal_div >> bit) & 1 == 1;
-
-                if was_set && !is_set {
-                    if (self.tima as u16).wrapping_add(1) > 0xFF {
-                        self.tima = self.tma;
-                        return true;
-                    } else {
-                        self.tima = self.tima.wrapping_add(1);
-                    }
+        let mut irq = false;
+        for _ in 0..4 {
+            self.reloaded_this_cycle = false;
+            if self.reload_pending {
+                self.reload_delay -= 1;
+                if self.reload_delay == 0 {
+                    self.tima = self.tma;
+                    self.reload_pending = false;
+                    self.reloaded_this_cycle = true;
+                    irq = true;
                 }
             }
+            let before = self.timer_signal();
+            self.div = self.div.wrapping_add(1);
+            let after = self.timer_signal();
+            if before && !after {
+                self.inc_tima();
+            }
         }
-
-        false
+        irq
     }
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            0xFF04 => (self.internal_div >> 8) as u8,
+            0xFF04 => (self.div >> 8) as u8,
             0xFF05 => self.tima,
             0xFF06 => self.tma,
-            0xFF07 => self.tac,
-            _ => panic!("Cannot read timer at addr: {:04X}", addr),
+            0xFF07 => self.tac | 0xF8,
+            _ => 0xFF,
         }
     }
 
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
-            0xFF04 => self.internal_div = 0,
-            0xFF05 => self.tima = val,
-            0xFF06 => self.tma = val,
-            0xFF07 => self.tac = val,
-            _ => panic!("Cannot write timer at addr: {:04X}", addr),
+            0xFF04 => {
+                let before = self.timer_signal();
+                self.div = 0;
+                if before && !self.timer_signal() {
+                    self.inc_tima();
+                }
+            }
+            0xFF05 => {
+                if !self.reloaded_this_cycle {
+                    self.tima = val;
+                    self.reload_pending = false;
+                }
+            }
+            0xFF06 => {
+                self.tma = val;
+                if self.reloaded_this_cycle {
+                    self.tima = val;
+                }
+            }
+            0xFF07 => {
+                let before = self.timer_signal();
+                self.tac = val & 0x07;
+                if before && !self.timer_signal() {
+                    self.inc_tima();
+                }
+            }
+            _ => {}
         }
     }
 }

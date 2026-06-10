@@ -1,86 +1,327 @@
 use std::sync::{Arc, Mutex};
 
-use crate::audio::audio_buffer::AudioBuffer;
+use crate::audio::buffer::AudioBuffer;
 
-#[derive(Default)]
-pub struct Channel {
-    duty_cycle: u8,
+const DUTY_TABLE: [[u8; 8]; 4] = [
+    [0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 1, 1, 1],
+    [0, 1, 1, 1, 1, 1, 1, 0],
+];
+
+const NOISE_DIVISORS: [u32; 8] = [8, 16, 32, 48, 64, 80, 96, 112];
+
+const MASTER_VOLUME: f32 = 0.25;
+const LP_ALPHA: f32 = 0.4;
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct Square {
+    sweep_pace: u8,
+    sweep_dir: bool,
+    sweep_step: u8,
+    sweep_timer: u8,
+    sweep_enabled: bool,
+    sweep_shadow: u16,
+
+    duty: u8,
     duty_pos: u8,
-    // lenght
-    length_timer: u8,
+    length_timer: u16,
     length_enabled: bool,
-    // enveloppe
+
+    env_initial: u8,
+    env_dir: bool,
+    env_pace: u8,
     env_timer: u8,
-    env_dir: u8,  // 0=down, 1=up
-    env_pace: u8, // 0..7, vitesse de l'enveloppe
+    volume: u8,
 
     period: u16,
-    volume: u8, // volume courant (change pendant le jeu)
-    initial_volume: u8,
-    freq_timer: u32,
+    freq_timer: i32,
     enabled: bool,
+    dac_enabled: bool,
 }
-impl Channel {
-    fn write_nr1(&mut self, val: u8) {
-        self.duty_cycle = (val & 0b1100_0000) >> 6;
-        self.length_timer = 64 - (val & 0b0011_1111);
-    }
-    fn write_nr2(&mut self, val: u8) {
-        self.initial_volume = (val & 0b1111_0000) >> 4; // bits 7-4
-        self.env_dir = (val & 0b0000_1000) >> 3; // bit 3
-        self.env_pace = val & 0b0000_0111; // bits 2-0
-        let dac_on = self.initial_volume != 0 || self.env_dir != 0;
-        if !dac_on {
-            self.enabled = false;
+
+impl Square {
+    fn trigger(&mut self) {
+        self.enabled = self.dac_enabled;
+        if self.length_timer == 0 {
+            self.length_timer = 64;
+        }
+        self.freq_timer = (2048 - self.period as i32) * 4;
+        self.volume = self.env_initial;
+        self.env_timer = self.env_pace;
+        self.sweep_shadow = self.period;
+        self.sweep_timer = if self.sweep_pace != 0 {
+            self.sweep_pace
+        } else {
+            8
+        };
+        self.sweep_enabled = self.sweep_pace != 0 || self.sweep_step != 0;
+        if self.sweep_step != 0 {
+            self.sweep_calc();
         }
     }
-    fn write_nr3(&mut self, val: u8) {
-        self.period = (self.period & 0b111_0000_0000) | val as u16;
+
+    fn sweep_calc(&mut self) -> u16 {
+        let delta = self.sweep_shadow >> self.sweep_step;
+        let new = if self.sweep_dir {
+            self.sweep_shadow.wrapping_sub(delta)
+        } else {
+            self.sweep_shadow + delta
+        };
+        if new > 2047 {
+            self.enabled = false;
+        }
+        new
     }
-    fn write_nr4(&mut self, val: u8) {
-        self.period = (self.period & 0b000_1111_1111) | ((val as u16 & 0b111) << 8);
-        self.length_enabled = val & 0b0100_0000 != 0;
-        if val & 0b1000_0000 != 0 {
-            self.enabled = true;
-            if self.length_timer == 0 {
-                self.length_timer = 64;
+
+    fn clock_sweep(&mut self) {
+        if self.sweep_timer > 0 {
+            self.sweep_timer -= 1;
+        }
+        if self.sweep_timer == 0 {
+            self.sweep_timer = if self.sweep_pace != 0 {
+                self.sweep_pace
+            } else {
+                8
+            };
+            if self.sweep_enabled && self.sweep_pace != 0 {
+                let new = self.sweep_calc();
+                if new <= 2047 && self.sweep_step != 0 {
+                    self.sweep_shadow = new;
+                    self.period = new;
+                    self.sweep_calc();
+                }
             }
-            self.freq_timer = (2048 - self.period as u32) * 4;
-            self.volume = self.initial_volume; // reset volume
+        }
+    }
+
+    fn clock_length(&mut self) {
+        if self.length_enabled && self.length_timer > 0 {
+            self.length_timer -= 1;
+            if self.length_timer == 0 {
+                self.enabled = false;
+            }
+        }
+    }
+
+    fn clock_envelope(&mut self) {
+        if self.env_pace == 0 {
+            return;
+        }
+        if self.env_timer > 0 {
+            self.env_timer -= 1;
+        }
+        if self.env_timer == 0 {
             self.env_timer = self.env_pace;
+            if self.env_dir && self.volume < 15 {
+                self.volume += 1;
+            } else if !self.env_dir && self.volume > 0 {
+                self.volume -= 1;
+            }
+        }
+    }
+
+    fn step(&mut self) {
+        self.freq_timer -= 4;
+        while self.freq_timer <= 0 {
+            self.freq_timer += (2048 - self.period as i32) * 4;
+            self.duty_pos = (self.duty_pos + 1) % 8;
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if !self.enabled || !self.dac_enabled {
+            return 0;
+        }
+        DUTY_TABLE[self.duty as usize][self.duty_pos as usize] * self.volume
+    }
+}
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct Wave {
+    dac_enabled: bool,
+    length_timer: u16,
+    length_enabled: bool,
+    volume_code: u8,
+    period: u16,
+    freq_timer: i32,
+    position: u8,
+    sample: u8,
+    ram: [u8; 16],
+    enabled: bool,
+}
+
+impl Wave {
+    fn trigger(&mut self) {
+        self.enabled = self.dac_enabled;
+        if self.length_timer == 0 {
+            self.length_timer = 256;
+        }
+        self.freq_timer = (2048 - self.period as i32) * 2;
+        self.position = 0;
+    }
+
+    fn clock_length(&mut self) {
+        if self.length_enabled && self.length_timer > 0 {
+            self.length_timer -= 1;
+            if self.length_timer == 0 {
+                self.enabled = false;
+            }
+        }
+    }
+
+    fn step(&mut self) {
+        self.freq_timer -= 4;
+        while self.freq_timer <= 0 {
+            self.freq_timer += (2048 - self.period as i32) * 2;
+            self.position = (self.position + 1) % 32;
+            let byte = self.ram[(self.position / 2) as usize];
+            self.sample = if self.position % 2 == 0 {
+                byte >> 4
+            } else {
+                byte & 0x0F
+            };
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if !self.enabled || !self.dac_enabled {
+            return 0;
+        }
+        match self.volume_code {
+            0 => 0,
+            1 => self.sample,
+            2 => self.sample >> 1,
+            _ => self.sample >> 2,
         }
     }
 }
 
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct Noise {
+    length_timer: u16,
+    length_enabled: bool,
+
+    env_initial: u8,
+    env_dir: bool,
+    env_pace: u8,
+    env_timer: u8,
+    volume: u8,
+
+    clock_shift: u8,
+    width_mode: bool,
+    divisor_code: u8,
+    freq_timer: i32,
+    lfsr: u16,
+    enabled: bool,
+    dac_enabled: bool,
+}
+
+impl Noise {
+    fn period(&self) -> i32 {
+        (NOISE_DIVISORS[self.divisor_code as usize] << self.clock_shift) as i32
+    }
+
+    fn trigger(&mut self) {
+        self.enabled = self.dac_enabled;
+        if self.length_timer == 0 {
+            self.length_timer = 64;
+        }
+        self.freq_timer = self.period();
+        self.volume = self.env_initial;
+        self.env_timer = self.env_pace;
+        self.lfsr = 0x7FFF;
+    }
+
+    fn clock_length(&mut self) {
+        if self.length_enabled && self.length_timer > 0 {
+            self.length_timer -= 1;
+            if self.length_timer == 0 {
+                self.enabled = false;
+            }
+        }
+    }
+
+    fn clock_envelope(&mut self) {
+        if self.env_pace == 0 {
+            return;
+        }
+        if self.env_timer > 0 {
+            self.env_timer -= 1;
+        }
+        if self.env_timer == 0 {
+            self.env_timer = self.env_pace;
+            if self.env_dir && self.volume < 15 {
+                self.volume += 1;
+            } else if !self.env_dir && self.volume > 0 {
+                self.volume -= 1;
+            }
+        }
+    }
+
+    fn step(&mut self) {
+        self.freq_timer -= 4;
+        while self.freq_timer <= 0 {
+            self.freq_timer += self.period().max(1);
+            let bit = (self.lfsr & 1) ^ ((self.lfsr >> 1) & 1);
+            self.lfsr = (self.lfsr >> 1) | (bit << 14);
+            if self.width_mode {
+                self.lfsr = (self.lfsr & !(1 << 6)) | (bit << 6);
+            }
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if !self.enabled || !self.dac_enabled {
+            return 0;
+        }
+        ((!self.lfsr & 1) as u8) * self.volume
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct APU {
+    #[serde(skip)]
     audio_buffer: Option<Arc<Mutex<AudioBuffer>>>,
-    cycle_count: u32,
-    tick_counter: f64,
+    frame_counter: u32,
+    frame_step: u8,
+    sample_counter: f64,
     ticks_per_sample: f64,
     is_on: bool,
-    channel1: Channel,
-    channel2: Channel,
+
+    nr50: u8,
+    nr51: u8,
+
+    ch1: Square,
+    ch2: Square,
+    ch3: Wave,
+    ch4: Noise,
+
+    hp_prev_in: f32,
+    hp_prev_out: f32,
+    lp_prev: f32,
 }
 
 impl APU {
     const CPU_FREQ: u32 = 4_194_304;
 
-    const DUTY_TABLE: [[u8; 8]; 4] = [
-        [0, 0, 0, 0, 0, 0, 0, 1], // 00 → 12.5%
-        [1, 0, 0, 0, 0, 0, 0, 1], // 01 → 25%
-        [1, 0, 0, 0, 0, 1, 1, 1], // 10 → 50%
-        [0, 1, 1, 1, 1, 1, 1, 0], // 11 → 75%
-    ];
-
     pub fn new() -> Self {
         APU {
             audio_buffer: None,
-            cycle_count: 0,
-            tick_counter: 0.0,
+            frame_counter: 0,
+            frame_step: 0,
+            sample_counter: 0.0,
             ticks_per_sample: APU::CPU_FREQ as f64 / 44_100.0,
             is_on: false,
-            channel1: Channel::default(),
-            channel2: Channel::default(),
+            nr50: 0,
+            nr51: 0,
+            ch1: Square::default(),
+            ch2: Square::default(),
+            ch3: Wave::default(),
+            ch4: Noise::default(),
+            hp_prev_in: 0.0,
+            hp_prev_out: 0.0,
+            lp_prev: 0.0,
         }
     }
 
@@ -88,154 +329,278 @@ impl APU {
         self.ticks_per_sample = APU::CPU_FREQ as f64 / sample_rate.max(1) as f64;
     }
 
+    pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
+        self.audio_buffer = Some(buffer);
+    }
+
+    pub fn audio_buffer_handle(&self) -> Option<Arc<Mutex<AudioBuffer>>> {
+        self.audio_buffer.clone()
+    }
+
     pub fn tick(&mut self) {
-        if !self.is_on {
-            return;
-        }
-        self.cycle_count += 4;
-
-        // Frame Sequencer : tous les 8192 T-cycles, on clock les composants lents
-        if self.cycle_count % 8192 == 0 {
-            let step = ((self.cycle_count / 8192) % 8) as u8;
-            match step {
-                0 | 2 | 4 | 6 => self.clock_length_all(), // 256 Hz
-                _ => {}
+        if self.is_on {
+            self.frame_counter += 4;
+            if self.frame_counter >= 8192 {
+                self.frame_counter -= 8192;
+                self.clock_frame_sequencer();
             }
-            if step == 7 {
-                self.clock_envelope_all(); // 64 Hz
-            }
-            if step == 2 || step == 6 {
-                self.clock_sweep(); // 128 Hz
-            }
+            self.ch1.step();
+            self.ch2.step();
+            self.ch3.step();
+            self.ch4.step();
         }
 
-        self.tick_channel1();
-        self.tick_channel2();
-        // self.tick_channel3();
-        // self.tick_channel4();
-
-        self.tick_counter += 4.0; // accumulateur downsampling
-        if self.tick_counter >= self.ticks_per_sample {
-            self.tick_counter -= self.ticks_per_sample;
-            let sample = self.get_sample();
+        self.sample_counter += 4.0;
+        if self.sample_counter >= self.ticks_per_sample {
+            self.sample_counter -= self.ticks_per_sample;
+            let sample = self.mix();
             if let Some(buffer) = &self.audio_buffer {
                 buffer.lock().unwrap().push(sample);
             }
         }
     }
 
-    fn clock_envelope_all(&mut self) {
-        for ch in [&mut self.channel1, &mut self.channel2] {
-            if ch.env_pace == 0 {
-                continue;
+    fn clock_frame_sequencer(&mut self) {
+        match self.frame_step {
+            0 | 4 => self.clock_length(),
+            2 | 6 => {
+                self.clock_length();
+                self.ch1.clock_sweep();
             }
-            if ch.env_timer > 0 {
-                ch.env_timer = ch.env_timer.saturating_sub(1);
+            7 => {
+                self.ch1.clock_envelope();
+                self.ch2.clock_envelope();
+                self.ch4.clock_envelope();
             }
-            if ch.env_timer == 0 {
-                ch.env_timer = ch.env_pace;
-                if ch.env_dir == 1 && ch.volume < 15 {
-                    ch.volume += 1;
-                }
-                if ch.env_dir == 0 && ch.volume > 0 {
-                    ch.volume -= 1;
-                }
-            }
+            _ => {}
         }
+        self.frame_step = (self.frame_step + 1) % 8;
     }
 
-    fn clock_sweep(&mut self) {
-        let ch = &mut self.channel1;
-        if ch.env_pace == 0 {
-            return;
-        }
+    fn clock_length(&mut self) {
+        self.ch1.clock_length();
+        self.ch2.clock_length();
+        self.ch3.clock_length();
+        self.ch4.clock_length();
     }
 
-    fn clock_length_all(&mut self) {
-        for ch in [&mut self.channel1, &mut self.channel2] {
-            if ch.length_enabled && ch.length_timer > 0 {
-                ch.length_timer = ch.length_timer.saturating_sub(1);
-                if ch.length_timer == 0 {
-                    ch.enabled = false;
-                }
-            }
-        }
+    fn dac(level: u8) -> f32 {
+        level as f32 / 7.5 - 1.0
     }
 
-    fn tick_channel1(&mut self) {
-        self.channel1.freq_timer = self.channel1.freq_timer.saturating_sub(4);
-        if self.channel1.freq_timer == 0 {
-            self.channel1.freq_timer = (2048 - self.channel1.period as u32) * 4;
-            self.channel1.duty_pos = (self.channel1.duty_pos + 1) % 8;
-        }
-    }
-
-    fn tick_channel2(&mut self) {
-        self.channel2.freq_timer = self.channel2.freq_timer.saturating_sub(4);
-        if self.channel2.freq_timer == 0 {
-            self.channel2.freq_timer = (2048 - self.channel2.period as u32) * 4;
-            self.channel2.duty_pos = (self.channel2.duty_pos + 1) % 8;
-        }
-    }
-
-    fn get_sample(&self) -> f32 {
+    fn mix(&mut self) -> f32 {
         if !self.is_on {
             return 0.0;
         }
 
-        let mut sample = 0.0;
+        let outs = [
+            (self.ch1.output(), self.ch1.dac_enabled),
+            (self.ch2.output(), self.ch2.dac_enabled),
+            (self.ch3.output(), self.ch3.dac_enabled),
+            (self.ch4.output(), self.ch4.dac_enabled),
+        ];
 
-        for channel in [&self.channel1, &self.channel2] {
-            if !channel.enabled {
+        let mut left = 0.0f32;
+        let mut right = 0.0f32;
+        for (i, (level, dac)) in outs.iter().enumerate() {
+            if !dac {
                 continue;
             }
-            let duty = APU::DUTY_TABLE[channel.duty_cycle as usize][channel.duty_pos as usize];
-            let amplitude = (duty as f32 * 2.0 - 1.0) * (channel.volume as f32 / 15.0);
-            sample += amplitude;
+            let analog = Self::dac(*level);
+            if self.nr51 & (1 << (i + 4)) != 0 {
+                left += analog;
+            }
+            if self.nr51 & (1 << i) != 0 {
+                right += analog;
+            }
         }
 
-        (sample * 0.25).clamp(-1.0, 1.0)
-    }
+        let left_vol = ((self.nr50 >> 4) & 0x7) as f32 + 1.0;
+        let right_vol = (self.nr50 & 0x7) as f32 + 1.0;
+        left = left * left_vol / 8.0 / 4.0;
+        right = right * right_vol / 8.0 / 4.0;
 
-    pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
-        self.audio_buffer = Some(buffer);
+        let mono = (left + right) * 0.5 * MASTER_VOLUME;
+        let hp = mono - self.hp_prev_in + 0.996 * self.hp_prev_out;
+        self.hp_prev_in = mono;
+        self.hp_prev_out = hp;
+        self.lp_prev += LP_ALPHA * (hp - self.lp_prev);
+        self.lp_prev.clamp(-1.0, 1.0)
     }
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            0xFF26 => {
-                let mut status = 0b0111_0000;
-                if self.is_on {
-                    status |= 0b1000_0000;
-                }
-                if self.channel1.enabled {
-                    status |= 0b0000_0001;
-                }
-                if self.channel2.enabled {
-                    status |= 0b0000_0010;
-                }
-                status
+            0xFF10 => self.read_nr10(),
+            0xFF11 => (self.ch1.duty << 6) | 0x3F,
+            0xFF12 => self.read_env(self.ch1.env_initial, self.ch1.env_dir, self.ch1.env_pace),
+            0xFF13 => 0xFF,
+            0xFF14 => (self.ch1.length_enabled as u8) << 6 | 0xBF,
+            0xFF16 => (self.ch2.duty << 6) | 0x3F,
+            0xFF17 => self.read_env(self.ch2.env_initial, self.ch2.env_dir, self.ch2.env_pace),
+            0xFF18 => 0xFF,
+            0xFF19 => (self.ch2.length_enabled as u8) << 6 | 0xBF,
+            0xFF1A => (self.ch3.dac_enabled as u8) << 7 | 0x7F,
+            0xFF1B => 0xFF,
+            0xFF1C => (self.ch3.volume_code << 5) | 0x9F,
+            0xFF1D => 0xFF,
+            0xFF1E => (self.ch3.length_enabled as u8) << 6 | 0xBF,
+            0xFF20 => 0xFF,
+            0xFF21 => self.read_env(self.ch4.env_initial, self.ch4.env_dir, self.ch4.env_pace),
+            0xFF22 => {
+                (self.ch4.clock_shift << 4)
+                    | (self.ch4.width_mode as u8) << 3
+                    | self.ch4.divisor_code
             }
+            0xFF23 => (self.ch4.length_enabled as u8) << 6 | 0xBF,
+            0xFF24 => self.nr50,
+            0xFF25 => self.nr51,
+            0xFF26 => self.read_nr52(),
+            0xFF30..=0xFF3F => self.ch3.ram[(addr - 0xFF30) as usize],
             _ => 0xFF,
         }
     }
 
+    fn read_nr10(&self) -> u8 {
+        0x80 | (self.ch1.sweep_pace << 4) | (self.ch1.sweep_dir as u8) << 3 | self.ch1.sweep_step
+    }
+
+    fn read_env(&self, initial: u8, dir: bool, pace: u8) -> u8 {
+        (initial << 4) | (dir as u8) << 3 | pace
+    }
+
+    fn read_nr52(&self) -> u8 {
+        let mut status = 0x70;
+        if self.is_on {
+            status |= 0x80;
+        }
+        if self.ch1.enabled {
+            status |= 0x01;
+        }
+        if self.ch2.enabled {
+            status |= 0x02;
+        }
+        if self.ch3.enabled {
+            status |= 0x04;
+        }
+        if self.ch4.enabled {
+            status |= 0x08;
+        }
+        status
+    }
+
     pub fn write(&mut self, addr: u16, val: u8) {
-        match addr {
-            0xFF26 => {
-                self.is_on = (val & 0b1000_0000) != 0;
+        if addr == 0xFF26 {
+            self.is_on = val & 0x80 != 0;
+            if !self.is_on {
+                self.power_off();
             }
-            // Channel 1
-            0xFF11 => self.channel1.write_nr1(val),
-            0xFF12 => self.channel1.write_nr2(val),
-            0xFF13 => self.channel1.write_nr3(val),
-            0xFF14 => self.channel1.write_nr4(val),
-            // Channel 2
-            0xFF16 => self.channel2.write_nr1(val),
-            0xFF17 => self.channel2.write_nr2(val),
-            0xFF18 => self.channel2.write_nr3(val),
-            0xFF19 => self.channel2.write_nr4(val),
+            return;
+        }
+
+        if (0xFF30..=0xFF3F).contains(&addr) {
+            self.ch3.ram[(addr - 0xFF30) as usize] = val;
+            return;
+        }
+
+        if !self.is_on {
+            return;
+        }
+
+        match addr {
+            0xFF10 => {
+                self.ch1.sweep_pace = (val >> 4) & 0x7;
+                self.ch1.sweep_dir = val & 0x08 != 0;
+                self.ch1.sweep_step = val & 0x07;
+            }
+            0xFF11 => {
+                self.ch1.duty = val >> 6;
+                self.ch1.length_timer = 64 - (val & 0x3F) as u16;
+            }
+            0xFF12 => self.write_square_env(true, val),
+            0xFF13 => self.ch1.period = (self.ch1.period & 0x700) | val as u16,
+            0xFF14 => {
+                self.ch1.period = (self.ch1.period & 0xFF) | ((val as u16 & 0x7) << 8);
+                self.ch1.length_enabled = val & 0x40 != 0;
+                if val & 0x80 != 0 {
+                    self.ch1.trigger();
+                }
+            }
+            0xFF16 => {
+                self.ch2.duty = val >> 6;
+                self.ch2.length_timer = 64 - (val & 0x3F) as u16;
+            }
+            0xFF17 => self.write_square_env(false, val),
+            0xFF18 => self.ch2.period = (self.ch2.period & 0x700) | val as u16,
+            0xFF19 => {
+                self.ch2.period = (self.ch2.period & 0xFF) | ((val as u16 & 0x7) << 8);
+                self.ch2.length_enabled = val & 0x40 != 0;
+                if val & 0x80 != 0 {
+                    self.ch2.trigger();
+                }
+            }
+            0xFF1A => {
+                self.ch3.dac_enabled = val & 0x80 != 0;
+                if !self.ch3.dac_enabled {
+                    self.ch3.enabled = false;
+                }
+            }
+            0xFF1B => self.ch3.length_timer = 256 - val as u16,
+            0xFF1C => self.ch3.volume_code = (val >> 5) & 0x3,
+            0xFF1D => self.ch3.period = (self.ch3.period & 0x700) | val as u16,
+            0xFF1E => {
+                self.ch3.period = (self.ch3.period & 0xFF) | ((val as u16 & 0x7) << 8);
+                self.ch3.length_enabled = val & 0x40 != 0;
+                if val & 0x80 != 0 {
+                    self.ch3.trigger();
+                }
+            }
+            0xFF20 => self.ch4.length_timer = 64 - (val & 0x3F) as u16,
+            0xFF21 => {
+                self.ch4.env_initial = val >> 4;
+                self.ch4.env_dir = val & 0x08 != 0;
+                self.ch4.env_pace = val & 0x07;
+                self.ch4.dac_enabled = val & 0xF8 != 0;
+                if !self.ch4.dac_enabled {
+                    self.ch4.enabled = false;
+                }
+            }
+            0xFF22 => {
+                self.ch4.clock_shift = val >> 4;
+                self.ch4.width_mode = val & 0x08 != 0;
+                self.ch4.divisor_code = val & 0x07;
+            }
+            0xFF23 => {
+                self.ch4.length_enabled = val & 0x40 != 0;
+                if val & 0x80 != 0 {
+                    self.ch4.trigger();
+                }
+            }
+            0xFF24 => self.nr50 = val,
+            0xFF25 => self.nr51 = val,
             _ => {}
         }
+    }
+
+    fn write_square_env(&mut self, ch1: bool, val: u8) {
+        let ch = if ch1 { &mut self.ch1 } else { &mut self.ch2 };
+        ch.env_initial = val >> 4;
+        ch.env_dir = val & 0x08 != 0;
+        ch.env_pace = val & 0x07;
+        ch.dac_enabled = val & 0xF8 != 0;
+        if !ch.dac_enabled {
+            ch.enabled = false;
+        }
+    }
+
+    fn power_off(&mut self) {
+        let wave_ram = self.ch3.ram;
+        self.ch1 = Square::default();
+        self.ch2 = Square::default();
+        self.ch3 = Wave::default();
+        self.ch3.ram = wave_ram;
+        self.ch4 = Noise::default();
+        self.nr50 = 0;
+        self.nr51 = 0;
+        self.frame_step = 0;
     }
 }

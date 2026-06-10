@@ -1,18 +1,19 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    audio::{apu::APU, audio_buffer::AudioBuffer},
+    audio::{apu::APU, buffer::AudioBuffer},
     hardware::{joypad::Joypad, ppu::PPU, serial::Serial, timer::Timer},
 };
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct IOBridge {
     joypad: Joypad,
     serial: Serial,
-    timer: Timer,       // $FF04	$FF07	DMG	Timer and divider
-    interrupt_flag: u8, // FF0F — IF: Interrupt flag
-    audio: APU,         // $FF10	$FF26	DMG	Audio
-    ppu: PPU,           // $FF40 - $FF4B - LCD Control, Status, Position, Scrolling, and Palettes
-    key1_spd: u8,       // KEY1/SPD (CGB Mode only): Prepare speed switch
+    timer: Timer,
+    interrupt_flag: u8,
+    audio: APU,
+    ppu: PPU,
+    key1_spd: u8,
     frame_ready: bool,
 }
 
@@ -34,9 +35,19 @@ impl IOBridge {
         if self.timer.tick() {
             self.interrupt_flag |= 0b0000_0100;
         }
-        if self.ppu.tick() {
+        let (vblank, stat) = self.ppu.tick();
+        if vblank {
             self.interrupt_flag |= 0b0000_0001;
             self.frame_ready = true;
+        }
+        if stat {
+            self.interrupt_flag |= 0b0000_0010;
+        }
+        if self.joypad.take_irq() {
+            self.interrupt_flag |= 0b0001_0000;
+        }
+        if self.serial.take_irq() {
+            self.interrupt_flag |= 0b0000_1000;
         }
         self.audio.tick();
     }
@@ -51,12 +62,36 @@ impl IOBridge {
         self.joypad.set_pressed(pressed);
     }
 
-    pub fn render_background(&self, vram: &[u8], framebuffer: &mut [u32]) {
-        self.ppu.render_background(vram, framebuffer);
+    pub fn framebuffer(&self) -> &[u32] {
+        self.ppu.framebuffer()
+    }
+
+    pub fn set_palette(&mut self, palette: [u32; 4]) {
+        self.ppu.set_palette(palette);
+    }
+
+    pub fn vram_read(&self, addr: u16) -> u8 {
+        self.ppu.vram_read(addr)
+    }
+    pub fn vram_write(&mut self, addr: u16, val: u8) {
+        self.ppu.vram_write(addr, val);
+    }
+    pub fn oam_read(&self, addr: u16) -> u8 {
+        self.ppu.oam_read(addr)
+    }
+    pub fn oam_write(&mut self, addr: u16, val: u8) {
+        self.ppu.oam_write(addr, val);
+    }
+    pub fn dma_write(&mut self, index: usize, val: u8) {
+        self.ppu.dma_write(index, val);
     }
 
     pub fn set_audio_buffer(&mut self, buffer: Arc<Mutex<AudioBuffer>>) {
         self.audio.set_audio_buffer(buffer);
+    }
+
+    pub fn audio_buffer_handle(&self) -> Option<Arc<Mutex<AudioBuffer>>> {
+        self.audio.audio_buffer_handle()
     }
 
     pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
@@ -80,9 +115,9 @@ impl IOBridge {
             0xFF01..=0xFF02 => self.serial.read(addr),
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupt_flag | 0b1110_0000,
-            0xFF10..=0xFF26 => self.audio.read(addr),
+            0xFF10..=0xFF26 | 0xFF30..=0xFF3F => self.audio.read(addr),
             0xFF40..=0xFF4B => self.ppu.read(addr),
-            0xFF4D => 0xFF, // CGB only flag - we are on DMG
+            0xFF4D => 0xFF,
             _ => 0xFF,
         }
     }
@@ -92,8 +127,8 @@ impl IOBridge {
             0xFF00 => self.joypad.write(val),
             0xFF01..=0xFF02 => self.serial.write(addr, val),
             0xFF04..=0xFF07 => self.timer.write(addr, val),
-            0xFF0F => self.interrupt_flag = val & 0b0001_1111, // We write only the 5 lower bits
-            0xFF10..=0xFF26 => self.audio.write(addr, val),
+            0xFF0F => self.interrupt_flag = val & 0b0001_1111,
+            0xFF10..=0xFF26 | 0xFF30..=0xFF3F => self.audio.write(addr, val),
             0xFF40..=0xFF4B => self.ppu.write(addr, val),
             0xFF4D => self.key1_spd = val,
             _ => {}

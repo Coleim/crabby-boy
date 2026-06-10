@@ -15,7 +15,7 @@ pub static ROM_SIZE_MAP: Lazy<HashMap<u8, &'static str>> = Lazy::new(|| {
     m.insert(0x52, "1.1 MiB (72 banks)");
     m.insert(0x53, "1.2 MiB (80 banks)");
     m.insert(0x54, "1.5 MiB (96 banks)");
-    m.insert(0xFF, "HuC1+RAM+BATTERY"); // keep your original special entry
+    m.insert(0xFF, "HuC1+RAM+BATTERY");
     m
 });
 
