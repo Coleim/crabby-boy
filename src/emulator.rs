@@ -34,7 +34,11 @@ impl CrabbyBoy {
         }
         let sync_buffer = audio_buffer.clone();
         bus.set_audio_buffer(audio_buffer);
-        let audio_active = self.audio_output.is_some();
+        let audio_active = if cfg!(test) {
+            false
+        } else {
+            self.audio_output.is_some()
+        };
 
         let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());
         header.print();
@@ -70,20 +74,20 @@ impl CrabbyBoy {
                 continue;
             }
 
-            // #[cfg(test)]
+            #[cfg(test)]
             let prev_pc = cpu.pc;
 
             cpu.handle_interrupts(&mut bus);
             cpu.execute(&mut bus);
 
-            // if audio_active {
-            //     while sync_buffer.lock().unwrap().count() >= 6144 {
-            //         // 6144 = nombre de sample minimal
-            //         std::thread::sleep(std::time::Duration::from_millis(1));
-            //     }
-            // }
+            if audio_active {
+                while sync_buffer.lock().unwrap().count() >= 6144 {
+                    // 6144 = nombre de sample minimal
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            }
 
-            // #[cfg(test)]
+            #[cfg(test)]
             if cpu.pc == prev_pc {
                 // Check eram to verify test results
                 if self.check_test_results(&bus) {
@@ -98,7 +102,7 @@ impl CrabbyBoy {
         Ok(())
     }
 
-    // #[cfg(test)]
+    #[cfg(test)]
     fn check_test_results(&self, bus: &Bus) -> bool {
         let serial_str =
             std::str::from_utf8(bus.get_io().get_serial().serial_output()).unwrap_or("");
@@ -131,6 +135,7 @@ impl CrabbyBoy {
         false
     }
 
+    #[cfg(test)]
     fn log_test_diagnostics(&self, bus: &Bus) {
         let serial_bytes = bus.get_io().get_serial().serial_output();
         let serial_str = std::str::from_utf8(serial_bytes).unwrap_or("");

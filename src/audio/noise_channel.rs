@@ -51,6 +51,7 @@ impl NoiseChannel {
     pub fn write_nr4(&mut self, val: u8, length_clock_on_write: bool) {
         let was_length_enabled = self.length_enabled;
         let trigger = val & 0b1000_0000 != 0;
+        self.length_enabled = val & 0b0100_0000 != 0;
 
         // DMG quirk: enabling length can immediately clock it depending on frame phase.
         if !was_length_enabled && self.length_enabled && length_clock_on_write && self.len_timer > 0
@@ -61,7 +62,6 @@ impl NoiseChannel {
             }
         }
 
-        self.length_enabled = val & 0b0100_0000 != 0;
         if trigger {
             let dac_off = self.initial_volume == 0 && self.env_dir == 0; // (initial volume = 0, envelope = decreasing) turns the DAC off 
             self.enabled = !dac_off;

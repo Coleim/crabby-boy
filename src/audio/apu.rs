@@ -134,21 +134,35 @@ impl APU {
         if !ch.sweep_enabled {
             return;
         }
-
-        if ch.sweep_pace == 0 {
-            return;
-        }
-
         ch.sweep_timer = ch.sweep_timer.saturating_sub(1);
         if ch.sweep_timer == 0 {
-            ch.sweep_timer = ch.sweep_pace;
+            ch.sweep_timer = if ch.sweep_pace == 0 { 8 } else { ch.sweep_pace };
+
+            if ch.sweep_substraction && ch.sweep_step == 0 {
+                ch.sweep_negate_used = true;
+            }
+            if ch.sweep_shadow_period == 0 {
+                return;
+            }
             let (next, overflow) = ch.sweep_next_period_and_overflow();
+            if ch.sweep_substraction {
+                ch.sweep_negate_used = true;
+            }
             if overflow {
                 ch.enabled = false;
                 ch.sweep_enabled = false;
                 return;
             }
-            ch.period = next;
+
+            if ch.sweep_pace > 0 && ch.sweep_step > 0 {
+                ch.sweep_shadow_period = next;
+                ch.period = next;
+                let (_, overflow2) = ch.sweep_next_period_and_overflow();
+                if overflow2 {
+                    ch.enabled = false;
+                    ch.sweep_enabled = false;
+                }
+            }
         }
     }
 

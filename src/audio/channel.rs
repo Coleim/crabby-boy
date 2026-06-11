@@ -23,6 +23,8 @@ pub struct Channel {
     pub sweep_step: u8,
     pub sweep_timer: u8,
     pub sweep_enabled: bool,
+    pub sweep_shadow_period: u16,
+    pub sweep_negate_used: bool,
 }
 
 impl Channel {
@@ -35,38 +37,25 @@ impl Channel {
     }
 
     pub fn sweep_next_period_and_overflow(&self) -> (u16, bool) {
-        let delta = self.period >> self.sweep_step;
+        let delta = self.sweep_shadow_period >> self.sweep_step;
         if self.sweep_substraction {
-            (self.period.saturating_sub(delta), false)
+            (self.sweep_shadow_period.saturating_sub(delta), false)
         } else {
-            let next = self.period as u32 + delta as u32;
+            let next = self.sweep_shadow_period as u32 + delta as u32;
             (next as u16, next > 0x7FF)
         }
     }
 
     pub fn write_sweep(&mut self, val: u8) {
         self.sweep_pace = (val & 0b0111_0000) >> 4;
+        let old_sub = self.sweep_substraction;
         self.sweep_substraction = val & 0b0000_1000 != 0;
         self.sweep_step = val & 0b0000_0111;
-        self.sweep_timer = self.sweep_pace;
 
-        // Trigger latches whether sweep unit is enabled.
-        self.sweep_enabled = self.sweep_pace > 0 || self.sweep_step > 0;
-        self.sweep_timer = if self.sweep_pace == 0 {
-            8
-        } else {
-            self.sweep_pace
-        };
-
-        // CH1 quirk: if shift>0, trigger performs an immediate sweep calculation.
-        if self.sweep_step > 0 {
-            let (next, overflow) = self.sweep_next_period_and_overflow();
-            if overflow {
-                self.enabled = false;
-                self.sweep_enabled = false;
-            } else {
-                self.period = next;
-            }
+        // CH1 quirk: leaving negate mode after a negate calculation disable CH1
+        if old_sub && !self.sweep_substraction && self.sweep_negate_used {
+            self.enabled = false;
+            self.sweep_enabled = false;
         }
     }
 
@@ -109,6 +98,30 @@ impl Channel {
         if trigger {
             let dac_off = self.initial_volume == 0 && self.env_dir == 0; // (initial volume = 0, envelope = decreasing) turns the DAC off 
             self.enabled = !dac_off;
+
+            self.sweep_shadow_period = self.period;
+            self.sweep_negate_used = false;
+
+            // Trigger latches wheter sweep unit is enabled
+            self.sweep_enabled = self.sweep_pace > 0 || self.sweep_step > 0;
+            self.sweep_timer = if self.sweep_pace == 0 {
+                8
+            } else {
+                self.sweep_pace
+            };
+
+            // Trigger performs an immediate overflow check but does not apply the result
+            if self.sweep_step > 0 {
+                let (_, overflow) = self.sweep_next_period_and_overflow();
+                if self.sweep_substraction {
+                    self.sweep_negate_used = true;
+                }
+                if overflow {
+                    self.enabled = false;
+                    self.sweep_enabled = false;
+                }
+            }
+
             if self.length_timer == 0 {
                 self.length_timer = 64;
                 if self.length_enabled && length_clock_on_write {

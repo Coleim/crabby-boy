@@ -1,5 +1,5 @@
 use cpal::{
-    BufferSize, SampleFormat, StreamConfig, SupportedStreamConfig, default_host,
+    BufferSize, SampleFormat, StreamConfig, default_host,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use std::sync::{Arc, Mutex};
