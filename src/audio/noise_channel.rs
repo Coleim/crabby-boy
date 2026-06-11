@@ -48,12 +48,28 @@ impl NoiseChannel {
         self.short_mode = (val & 0b0000_1000) != 0;
     }
 
-    pub fn write_nr4(&mut self, val: u8) {
+    pub fn write_nr4(&mut self, val: u8, length_clock_on_write: bool) {
+        let was_length_enabled = self.length_enabled;
+        let trigger = val & 0b1000_0000 != 0;
+
+        // DMG quirk: enabling length can immediately clock it depending on frame phase.
+        if !was_length_enabled && self.length_enabled && length_clock_on_write && self.len_timer > 0
+        {
+            self.len_timer = self.len_timer.saturating_sub(1);
+            if self.len_timer == 0 && !trigger {
+                self.enabled = false;
+            }
+        }
+
         self.length_enabled = val & 0b0100_0000 != 0;
-        if val & 0b1000_0000 != 0 {
-            self.enabled = true;
+        if trigger {
+            let dac_off = self.initial_volume == 0 && self.env_dir == 0; // (initial volume = 0, envelope = decreasing) turns the DAC off 
+            self.enabled = !dac_off;
             if self.len_timer == 0 {
                 self.len_timer = 64;
+                if self.length_enabled && length_clock_on_write {
+                    self.len_timer = self.len_timer.saturating_sub(1);
+                }
             }
             self.volume = self.initial_volume; // reset volume
             self.env_timer = if self.env_pace == 0 { 8 } else { self.env_pace }; // The volume envelope and sweep timers treat a period of 0 as 8.

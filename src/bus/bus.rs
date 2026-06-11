@@ -83,8 +83,14 @@ impl Bus {
         match addr {
             0x0000..=0x3FFF => self.rom[addr as usize], // Banking 0
             0x4000..=0x7FFF => {
-                let offset: usize = self.bank_number as usize * 0x4000;
-                self.rom[(offset + (addr - 0x4000) as usize) as usize]
+                let bank_size = 0x4000usize;
+                let bank_count = (self.rom.len().max(1) + bank_size - 1) / bank_size;
+                let mut bank = self.bank_number as usize;
+                if bank == 0 && bank_count > 1 {
+                    bank = 1;
+                }
+                let index = bank * bank_size + (addr as usize - 0x4000);
+                self.rom.get(index).copied().unwrap_or(0xFF)
             }
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
@@ -94,7 +100,7 @@ impl Bus {
                     "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
                     addr
                 );
-                return 0x00;
+                0x00
             }
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize],
             0xFEA0..=0xFEFF => {
@@ -102,7 +108,7 @@ impl Bus {
                     "Not Usable	Nintendo says use of this area is prohibited. Addr: {:02x}",
                     addr
                 );
-                return 0x00;
+                0x00
             }
             0xFF00..=0xFF7F => self.io.read(addr),
             0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],

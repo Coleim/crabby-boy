@@ -7,7 +7,8 @@ use crate::audio::{
 
 pub struct APU {
     audio_buffer: Option<Arc<Mutex<AudioBuffer>>>,
-    cycle_count: u32,
+    div_apu_counter: u16,
+    frame_seq_step: u8,
     tick_counter: f64,
     tick_per_sample: f64,
     is_on: bool,
@@ -32,7 +33,8 @@ impl APU {
     pub fn new() -> Self {
         APU {
             audio_buffer: None,
-            cycle_count: 0,
+            div_apu_counter: 0,
+            frame_seq_step: 0,
             tick_counter: 0.0,
             tick_per_sample: 0.0,
             is_on: false,
@@ -50,25 +52,28 @@ impl APU {
     }
 
     pub fn tick(&mut self) {
-        if !self.is_on {
-            return;
-        }
         for _ in 0..4 {
-            self.cycle_count += 1;
+            self.div_apu_counter += 1;
 
-            // Frame Sequencer : tous les 8192 T-cycles, on clock les composants lents
-            if self.cycle_count % 8192 == 0 {
-                let step = ((self.cycle_count / 8192) % 8) as u8;
-                match step {
-                    0 | 2 | 4 | 6 => self.clock_length_all(), // 256 Hz
-                    _ => {}
+            if self.div_apu_counter == 8192 {
+                self.div_apu_counter = 0;
+                self.frame_seq_step = (self.frame_seq_step + 1) & 0x07;
+                if self.is_on {
+                    match self.frame_seq_step {
+                        0 | 2 | 4 | 6 => self.clock_length_all(), // 256 Hz
+                        _ => {}
+                    }
+                    if self.frame_seq_step == 7 {
+                        self.clock_envelope_all(); // 64 Hz
+                    }
+                    if self.frame_seq_step == 2 || self.frame_seq_step == 6 {
+                        self.clock_sweep(); // 128 Hz
+                    }
                 }
-                if step == 7 {
-                    self.clock_envelope_all(); // 64 Hz
-                }
-                if step == 2 || step == 6 {
-                    self.clock_sweep(); // 128 Hz
-                }
+            }
+
+            if !self.is_on {
+                continue;
             }
 
             self.channel1.tick();
@@ -126,6 +131,10 @@ impl APU {
 
     fn clock_sweep(&mut self) {
         let ch = &mut self.channel1;
+        if !ch.sweep_enabled {
+            return;
+        }
+
         if ch.sweep_pace == 0 {
             return;
         }
@@ -133,20 +142,13 @@ impl APU {
         ch.sweep_timer = ch.sweep_timer.saturating_sub(1);
         if ch.sweep_timer == 0 {
             ch.sweep_timer = ch.sweep_pace;
-            // compute new period
-            let delta = ch.period >> ch.sweep_step;
-            if ch.sweep_substraction {
-                ch.period = ch.period.saturating_sub(delta);
-            } else {
-                ch.period += delta;
-                if ch.period > 0b111_1111_1111 {
-                    ch.enabled = false;
-                    return;
-                }
-            }
-            if ch.period > 0b111_1111_1111 {
+            let (next, overflow) = ch.sweep_next_period_and_overflow();
+            if overflow {
                 ch.enabled = false;
+                ch.sweep_enabled = false;
+                return;
             }
+            ch.period = next;
         }
     }
 
@@ -196,13 +198,7 @@ impl APU {
 
         // CH3
         if self.channel3.enabled && self.channel3.dac_enabled {
-            let byte = self.channel3.wave_ram[(self.channel3.wave_index / 2) as usize];
-            let nibble = if self.channel3.wave_index % 2 == 0 {
-                (byte >> 4) & 0xF
-            } else {
-                byte & 0xF
-            };
-            let shifted = nibble
+            let shifted = self.channel3.sample_buffer
                 >> match self.channel3.volume_level {
                     0 => 4,
                     1 => 0,
@@ -266,7 +262,6 @@ impl APU {
 
                 status
             }
-            0xFF15 => 0xFF,
 
             0xFF11 => 0b0011_1111 | (self.channel1.duty_cycle << 6),
             0xFF16 => 0b0011_1111 | (self.channel2.duty_cycle << 6),
@@ -281,9 +276,6 @@ impl APU {
                     | (self.channel2.env_dir << 3)
                     | (self.channel2.initial_volume << 4)
             }
-
-            0xFF13 => 0xFF,
-            0xFF18 => 0xFF,
 
             0xFF14 => {
                 let mut status = 0b1011_1111;
@@ -312,7 +304,6 @@ impl APU {
                 status
             }
 
-            0xFF1B => 0xFF,
             0xFF1C => 0b1001_1111 | (self.channel3.volume_level << 5),
             0xFF1E => {
                 let mut status = 0b1011_1111;
@@ -323,7 +314,6 @@ impl APU {
             }
 
             // Channel 4
-            0xFF20 => 0xFF,
             0xFF21 => {
                 self.channel4.env_pace
                     | (self.channel4.env_dir << 3)
@@ -344,56 +334,80 @@ impl APU {
             }
 
             0xFF30..=0xFF3F => self.channel3.read_wave_ram((addr - 0xFF30) as u8),
+
+            // Write only
+            0xFF13 => 0xFF,
+            0xFF18 => 0xFF,
+            0xFF1B => 0xFF,
+            0xFF1D => 0xFF,
+            0xFF20 => 0xFF,
+            0xFF15 => 0xFF,
             _ => {
                 println!("[AUDIO REG] READ NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
                 0xFF
-                // std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");
             }
         }
     }
 
     pub fn write(&mut self, addr: u16, val: u8) {
+        // Writes during even frame-sequencer steps are in the "clock-on-write" half-phase.
+        let length_clock_on_write = (self.frame_seq_step & 1) == 0;
+
         match addr {
             0xFF26 => {
-                self.is_on = (val & 0b1000_0000) != 0;
-                if !self.is_on {
-                    self.nr51 = 0;
-                    self.nr50 = 0;
+                let new_on = (val & 0b1000_0000) != 0;
+
+                if self.is_on != new_on {
+                    if new_on {
+                        self.div_apu_counter = 0;
+                        self.frame_seq_step = 7;
+                    } else {
+                        self.nr50 = 0;
+                        self.nr51 = 0;
+                    }
+
                     self.channel1.reset();
                     self.channel2.reset();
                     self.channel3.reset();
                     self.channel4.reset();
                 }
+                self.is_on = new_on;
             }
+
+            // if we power off the APU, all registers except the wave RAM become inaccessible and return 0xFF on read,
+            // and ignore writes.
+            // This is a DMG behavior that some games rely on (like Pokémon) to reset the sound when changing zones.
+            // However, the wave RAM remains readable and writable even when powered off.
+            // DMG quirk: while APU is off, NRx1 writes still load length counters.
+            0xFF11 => self.channel1.write_nr1(val),
+            0xFF16 => self.channel2.write_nr1(val),
+            0xFF1B => self.channel3.write_nr1(val),
+            0xFF20 => self.channel4.write_nr1(val),
 
             _ if !self.is_on && !(0xFF30..=0xFF3F).contains(&addr) => {}
 
             // Channel 1
             0xFF10 => self.channel1.write_sweep(val),
-            0xFF11 => self.channel1.write_nr1(val),
             0xFF12 => self.channel1.write_nr2(val),
             0xFF13 => self.channel1.write_nr3(val),
-            0xFF14 => self.channel1.write_nr4(val),
+            0xFF14 => self.channel1.write_nr4(val, length_clock_on_write),
             // Channel 2
-            0xFF16 => self.channel2.write_nr1(val),
             0xFF17 => self.channel2.write_nr2(val),
             0xFF18 => self.channel2.write_nr3(val),
-            0xFF19 => self.channel2.write_nr4(val),
+            0xFF19 => self.channel2.write_nr4(val, length_clock_on_write),
             0xFF25 => self.nr51 = val,
             0xFF24 => self.nr50 = val,
             // Channel 3
             0xFF1A => self.channel3.write_nr0(val),
-            0xFF1B => self.channel3.write_nr1(val),
             0xFF1C => self.channel3.write_nr2(val),
             0xFF1D => self.channel3.write_nr3(val),
-            0xFF1E => self.channel3.write_nr4(val),
+            0xFF1E => self.channel3.write_nr4(val, length_clock_on_write),
             // FF30–FF3F — Wave pattern RAM
             0xFF30..=0xFF3F => self.channel3.write_wave_ram((addr - 0xFF30) as u8, val),
             // Channel 4
-            0xFF20 => self.channel4.write_nr1(val),
             0xFF21 => self.channel4.write_nr2(val),
             0xFF22 => self.channel4.write_nr3(val),
-            0xFF23 => self.channel4.write_nr4(val),
+            0xFF23 => self.channel4.write_nr4(val, length_clock_on_write),
             _ => {
                 // println!("[AUDIO REG] WRITE NOT IMPLEMENTED FOR ADDR: {:02X}", addr);
                 // std::panic::panic_any("[AUDIO REG] Not implemented at the moment.");

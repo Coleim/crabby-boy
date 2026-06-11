@@ -76,12 +76,12 @@ impl CrabbyBoy {
             cpu.handle_interrupts(&mut bus);
             cpu.execute(&mut bus);
 
-            if audio_active {
-                while sync_buffer.lock().unwrap().count() >= 6144 {
-                    // 6144 = nombre de sample minimal
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-            }
+            // if audio_active {
+            //     while sync_buffer.lock().unwrap().count() >= 6144 {
+            //         // 6144 = nombre de sample minimal
+            //         std::thread::sleep(std::time::Duration::from_millis(1));
+            //     }
+            // }
 
             // #[cfg(test)]
             if cpu.pc == prev_pc {
