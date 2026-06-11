@@ -126,18 +126,7 @@ impl Bus {
                 println!("Banking Mode Select (Write Only): {:02x}", val);
             }
             0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
-            0xA000..=0xBFFF => {
-                self.eram[(addr - 0xA000) as usize] = val;
-
-                if self.eram[0] == 0x00 {
-                    let text: String = self.eram[4..]
-                        .iter()
-                        .take_while(|&&b| b != 0)
-                        .map(|&b| b as char)
-                        .collect();
-                    println!("{}", text);
-                }
-            }
+            0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM
             0xFE00..=0xFE9F => self.oam[(addr - 0xFE00) as usize] = val,

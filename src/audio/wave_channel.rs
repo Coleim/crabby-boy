@@ -13,6 +13,16 @@ pub struct WaveChannel {
 }
 
 impl WaveChannel {
+    pub fn reset(&mut self) {
+        let init_len = self.initial_len_timer;
+        let len = self.len_timer;
+        let wave_ram = self.wave_ram;
+        *self = Self::default();
+        self.initial_len_timer = init_len;
+        self.len_timer = len;
+        self.wave_ram = wave_ram;
+    }
+
     pub fn write_nr0(&mut self, val: u8) {
         self.dac_enabled = val & 0b1000_0000 != 0;
         if !self.dac_enabled {

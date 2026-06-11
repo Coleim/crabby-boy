@@ -19,6 +19,14 @@ pub struct NoiseChannel {
     pub lfsr: u16,
 }
 impl NoiseChannel {
+    pub fn reset(&mut self) {
+        let init_len = self.initial_len_timer;
+        let len = self.len_timer;
+        *self = Self::default();
+        self.initial_len_timer = init_len;
+        self.len_timer = len;
+    }
+
     pub fn write_nr1(&mut self, val: u8) {
         self.initial_len_timer = 64 - (val & 0b0011_1111) as u16;
         self.len_timer = self.initial_len_timer;

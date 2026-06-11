@@ -19,15 +19,23 @@ pub struct Channel {
 
     // Sweep
     pub sweep_pace: u8,
-    pub sweep_addition: bool,
+    pub sweep_substraction: bool,
     pub sweep_step: u8,
     pub sweep_timer: u8,
 }
 
 impl Channel {
+    pub fn reset(&mut self) {
+        let init_len = self.initial_length_timer;
+        let len = self.length_timer;
+        *self = Self::default();
+        self.initial_length_timer = init_len;
+        self.length_timer = len;
+    }
+
     pub fn write_sweep(&mut self, val: u8) {
         self.sweep_pace = (val & 0b0111_0000) >> 4;
-        self.sweep_addition = val & 0b0000_1000 == 0;
+        self.sweep_substraction = val & 0b0000_1000 != 0;
         self.sweep_step = val & 0b0000_0111;
         self.sweep_timer = self.sweep_pace;
     }

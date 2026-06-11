@@ -6,13 +6,17 @@ mod hardware;
 
 use crate::bus::bus::Bus;
 use crate::emulator::CrabbyBoy;
+use std::env;
 
 fn main() -> Result<(), String> {
+    let args: Vec<String> = env::args().collect();
+    let file_path = &args[1];
+
     // let file_path = "./tests/Tetris.gb";
     // let file_path = "./tests/Kirby.gb";
     // let file_path = "./tests/halt_bug.gb";
     // let file_path = "./tests/interrupt_time.gb";
-    let file_path = "./tests/dmg_sound.gb";
+    // let file_path = "./tests/dmg_sound.gb";
     // let file_path = "./tests/mem_timing-2/01-read_timing.gb";
     // let file_path = "./tests/mem_timing-2/02-write_timing.gb";
     // let file_path = "./tests/mem_timing-2.gb";

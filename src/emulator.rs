@@ -89,6 +89,7 @@ impl CrabbyBoy {
                 if self.check_test_results(&bus) {
                     return Ok(());
                 } else {
+                    self.log_test_diagnostics(&bus);
                     return Err("Test ROM reported failure".to_string());
                 }
             }
@@ -128,6 +129,27 @@ impl CrabbyBoy {
         }
 
         false
+    }
+
+    fn log_test_diagnostics(&self, bus: &Bus) {
+        let serial_bytes = bus.get_io().get_serial().serial_output();
+        let serial_str = std::str::from_utf8(serial_bytes).unwrap_or("");
+        if !serial_str.is_empty() {
+            eprintln!("[DIAG] serial: {}", serial_str);
+        }
+        let eram = bus.get_eram();
+        if eram.len() >= 8 {
+            eprintln!(
+                "[DIAG] eram status={:02X} sig={:02X} {:02X} {:02X}",
+                eram[0], eram[1], eram[2], eram[3]
+            );
+            let text: String = eram[4..]
+                .iter()
+                .take_while(|&&b| b != 0)
+                .map(|&b| b as char)
+                .collect();
+            println!("[DIAG] eram text: {}", text);
+        }
     }
 }
 
@@ -177,4 +199,20 @@ mod tests {
     cpu_instr_test!(instr_timing, "./tests/instr_timing.gb");
 
     cpu_instr_test!(halt_bug, "./tests/halt_bug.gb");
+
+    // dmg_sounds
+    cpu_instr_test!(sound_01, "./tests/dmg_sound/01-registers.gb");
+    cpu_instr_test!(sound_02, "./tests/dmg_sound/02-len ctr.gb");
+    cpu_instr_test!(sound_03, "./tests/dmg_sound/03-trigger.gb");
+    cpu_instr_test!(sound_04, "./tests/dmg_sound/04-sweep.gb");
+    cpu_instr_test!(sound_05, "./tests/dmg_sound/05-sweep details.gb");
+    cpu_instr_test!(sound_06, "./tests/dmg_sound/06-overflow on trigger.gb");
+    cpu_instr_test!(sound_07, "./tests/dmg_sound/07-len sweep period sync.gb");
+    cpu_instr_test!(sound_08, "./tests/dmg_sound/08-len ctr during power.gb");
+    cpu_instr_test!(sound_09, "./tests/dmg_sound/09-wave read while on.gb");
+    cpu_instr_test!(sound_10, "./tests/dmg_sound/10-wave trigger while on.gb");
+    cpu_instr_test!(sound_11, "./tests/dmg_sound/11-regs after power.gb");
+    cpu_instr_test!(sound_12, "./tests/dmg_sound/12-wave write while on.gb");
+
+    cpu_instr_test!(sound_all, "./tests/dmg_sound.gb");
 }

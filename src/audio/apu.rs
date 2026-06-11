@@ -135,14 +135,14 @@ impl APU {
             ch.sweep_timer = ch.sweep_pace;
             // compute new period
             let delta = ch.period >> ch.sweep_step;
-            if ch.sweep_addition {
+            if ch.sweep_substraction {
+                ch.period = ch.period.saturating_sub(delta);
+            } else {
                 ch.period += delta;
                 if ch.period > 0b111_1111_1111 {
                     ch.enabled = false;
                     return;
                 }
-            } else {
-                ch.period = ch.period.saturating_sub(delta);
             }
             if ch.period > 0b111_1111_1111 {
                 ch.enabled = false;
@@ -250,11 +250,15 @@ impl APU {
                 if self.channel3.enabled {
                     status |= 0b0000_0100;
                 }
+                if self.channel4.enabled {
+                    status |= 0b0000_1000;
+                }
                 status
             }
+
             0xFF10 => {
                 let mut status = 0b1000_0000;
-                if !self.channel1.sweep_addition {
+                if self.channel1.sweep_substraction {
                     status |= 0b0000_1000;
                 }
                 status |= self.channel1.sweep_step & 0b0000_0111;
@@ -262,29 +266,34 @@ impl APU {
 
                 status
             }
+            0xFF15 => 0xFF,
 
             0xFF11 => 0b0011_1111 | (self.channel1.duty_cycle << 6),
+            0xFF16 => 0b0011_1111 | (self.channel2.duty_cycle << 6),
+
             0xFF12 => {
                 self.channel1.env_pace
                     | (self.channel1.env_dir << 3)
                     | (self.channel1.initial_volume << 4)
             }
+            0xFF17 => {
+                self.channel2.env_pace
+                    | (self.channel2.env_dir << 3)
+                    | (self.channel2.initial_volume << 4)
+            }
+
             0xFF13 => 0xFF,
+            0xFF18 => 0xFF,
+
             0xFF14 => {
-                let mut status = 0b0011_1111;
-                if self.channel1.enabled {
-                    status |= 0b1000_0000;
-                }
+                let mut status = 0b1011_1111;
                 if self.channel1.length_enabled {
                     status |= 0b0100_0000;
                 }
                 status
             }
             0xFF19 => {
-                let mut status = 0b0011_1111;
-                if self.channel2.enabled {
-                    status |= 0b1000_0000;
-                }
+                let mut status = 0b1011_1111;
                 if self.channel2.length_enabled {
                     status |= 0b0100_0000;
                 }
@@ -302,6 +311,9 @@ impl APU {
                 }
                 status
             }
+
+            0xFF1B => 0xFF,
+            0xFF1C => 0b1001_1111 | (self.channel3.volume_level << 5),
             0xFF1E => {
                 let mut status = 0b1011_1111;
                 if self.channel3.length_enabled {
@@ -309,6 +321,20 @@ impl APU {
                 }
                 status
             }
+
+            // Channel 4
+            0xFF20 => 0xFF,
+            0xFF21 => {
+                self.channel4.env_pace
+                    | (self.channel4.env_dir << 3)
+                    | (self.channel4.initial_volume << 4)
+            }
+            0xFF22 => {
+                (self.channel4.clock_shift << 4)
+                    | ((self.channel4.short_mode as u8) << 3)
+                    | (self.channel4.clock_divider & 0b0000_0111)
+            }
+
             0xFF23 => {
                 let mut status = 0b1011_1111;
                 if self.channel4.length_enabled {
@@ -331,11 +357,17 @@ impl APU {
             0xFF26 => {
                 self.is_on = (val & 0b1000_0000) != 0;
                 if !self.is_on {
-                    self.channel1.enabled = false;
-                    self.channel2.enabled = false;
-                    self.channel3.enabled = false;
+                    self.nr51 = 0;
+                    self.nr50 = 0;
+                    self.channel1.reset();
+                    self.channel2.reset();
+                    self.channel3.reset();
+                    self.channel4.reset();
                 }
             }
+
+            _ if !self.is_on && !(0xFF30..=0xFF3F).contains(&addr) => {}
+
             // Channel 1
             0xFF10 => self.channel1.write_sweep(val),
             0xFF11 => self.channel1.write_nr1(val),
