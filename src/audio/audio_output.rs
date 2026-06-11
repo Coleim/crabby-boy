@@ -1,5 +1,5 @@
 use cpal::{
-    BufferSize, SampleFormat, StreamConfig, default_host,
+    BufferSize, SampleFormat, StreamConfig, SupportedBufferSize, default_host,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use std::sync::{Arc, Mutex};
@@ -19,6 +19,7 @@ impl AudioOutput {
         let mut found_f32 = false;
         let mut selected_channels: u16 = 2;
         let mut selected_sample_rate: u32 = 44_100;
+        let mut selected_buffer_size = BufferSize::Default;
 
         for cfg in device.supported_output_configs().ok()? {
             if cfg.sample_format() != SampleFormat::F32 {
@@ -31,6 +32,10 @@ impl AudioOutput {
             if !(min..=max).contains(&44_100) {
                 selected_sample_rate = min;
             }
+            if let SupportedBufferSize::Range { min, max } = cfg.buffer_size() {
+                let target = 2048;
+                selected_buffer_size = BufferSize::Fixed(target.clamp(*min, *max));
+            }
             found_f32 = true;
             break;
         }
@@ -41,29 +46,37 @@ impl AudioOutput {
         let config = StreamConfig {
             channels: selected_channels,
             sample_rate: selected_sample_rate,
-            buffer_size: BufferSize::Default,
+            buffer_size: selected_buffer_size,
         };
 
         let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
+        let mut last_sample = 0.0_f32;
 
         let stream = device
             .build_output_stream(
                 &config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let mut buf = buffer.lock().unwrap();
                     // let mut last_sample: f32 = 0.0;
                     // let mut hp_x1 = 0.0; // memorise l'entree precedente
                     // let mut hp_y1 = 0.0; // memorise la sortie precedente
                     // let hp_a = 1.0; // coefficient du filtre
                     let channels = selected_channels as usize;
-                    for frame in data.chunks_mut(channels) {
-                        let sample = if !buf.empty() { buf.pop() } else { 0.0 };
-                        for out in frame.iter_mut() {
-                            *out = sample;
+
+                    if let Ok(mut buf) = buffer.try_lock() {
+                        for frame in data.chunks_mut(channels) {
+                            if !buf.empty() {
+                                last_sample = buf.pop();
+                            }
+                            for out in frame.iter_mut() {
+                                *out = last_sample;
+                            }
+                        }
+                    } else {
+                        for out in data.iter_mut() {
+                            *out = last_sample;
                         }
                     }
                 },
-                // AudioOutput::write_silence::<f32>,
                 err_fn,
                 None,
             )
