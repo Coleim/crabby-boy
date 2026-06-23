@@ -1,6 +1,7 @@
 mod audio;
 mod bus;
 mod cpu;
+mod display_interface;
 mod emulator;
 mod hardware;
 
@@ -10,7 +11,12 @@ use std::env;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
-    let file_path = &args[1];
+
+    let file_path = if args.len() > 1 {
+        &args[1]
+    } else {
+        "./tests/Kirby.gb"
+    };
 
     // let file_path = "./tests/Tetris.gb";
     // let file_path = "./tests/Kirby.gb";

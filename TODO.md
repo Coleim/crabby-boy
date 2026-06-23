@@ -1,17 +1,19 @@
-
-
-[X] Rajouter cli param pour la rom a lire
-[X] Implementer l'affichage des erreurs en output
-[] channel sweep addition -> sweep soustraction
-[X] mettre les tests unitaire de chaque dmg sounds , puis dmg_sound global (et desactiver le timer si c'est une rom de test)
-
-[] clock sweep -> mettre dans channel et pas dans apu
-[] centraliser l'enveloppe (et le clock du coup)
+                      an error occur
+red on the output audio stream: Buffer underrun/overrun occurred.
+                                                                 an error occurred on the output audio stream: Buffer underrun/overrun occurred.
+                                                                                                                                                an error occurred on the output audio s
+tream: Buffer underrun/overrun occurred.
+                                        an error occurred on the output audio stream: Buffer underrun/overrun occurred.
 
 
 
-[] Faire passer les tests blargg rom dmg sound 01
- - implementer tous les registres 
+https://github.com/emoon/rust_minifb/blob/master/examples/menu.rs
+
+[] Placeholder pour le screen
+[] Afficher les infos de la cartouche
+[] Afficher les instructions (DISASSEMBLY)
+[] Afficher les registres CPU
+[] Afficher les tiles dans la VRAM
 
 
 
@@ -29,7 +31,6 @@ Tests PPU: https://github.com/mattcurrie/dmg-acid2
 
 
 
-Affichage → pixels ou wgpu ou minifb
-ou macroquad
+Affichage → minifb
 Input → winit
 

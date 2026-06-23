@@ -5,6 +5,7 @@ use crate::audio::audio_output::AudioOutput;
 use crate::bus::bus::Bus;
 use crate::cpu::cpu::CPU;
 use crate::cpu::header::CartdrigeHeader;
+use crate::display_interface::DisplayInterface;
 
 pub struct CrabbyBoy {
     #[cfg(test)]
@@ -45,9 +46,16 @@ impl CrabbyBoy {
         header.is_valid()?;
         // create cpu
         let mut cpu: CPU = CPU::new();
+
+        let mut graphics = DisplayInterface::new();
+        let mut terminal = ratatui::init();
+
         #[cfg(test)]
         let mut loop_count: u32 = 0;
         loop {
+            if !graphics.running {
+                break;
+            }
             #[cfg(test)]
             {
                 loop_count = loop_count.wrapping_add(1);
@@ -58,7 +66,6 @@ impl CrabbyBoy {
                     ));
                 }
             }
-
             if cpu.stopped {
                 println!("CPU STOPPED. Waiting interrupts");
                 // CPU does nothing until an interrupt or button press wakes it
@@ -87,6 +94,8 @@ impl CrabbyBoy {
                 }
             }
 
+            graphics.update(&mut terminal);
+
             #[cfg(test)]
             if cpu.pc == prev_pc {
                 // Check eram to verify test results
@@ -99,6 +108,7 @@ impl CrabbyBoy {
             }
         }
 
+        ratatui::restore();
         Ok(())
     }
 
