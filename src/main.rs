@@ -1,13 +1,18 @@
 mod audio;
 mod bus;
 mod cpu;
+mod crabby_boy;
+mod display;
 mod display_interface;
-mod emulator;
 mod hardware;
 
+use crate::audio::audio_output::AudioOutput;
 use crate::bus::bus::Bus;
-use crate::emulator::CrabbyBoy;
+use crate::crabby_boy::CrabbyBoy;
+use crate::display::display::Display;
+use crate::display::ratatui_display::RatatuiDisplay;
 use std::env;
+use std::time::{Duration, Instant};
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
@@ -18,33 +23,39 @@ fn main() -> Result<(), String> {
         "./tests/Kirby.gb"
     };
 
-    // let file_path = "./tests/Tetris.gb";
-    // let file_path = "./tests/Kirby.gb";
-    // let file_path = "./tests/halt_bug.gb";
-    // let file_path = "./tests/interrupt_time.gb";
-    // let file_path = "./tests/dmg_sound.gb";
-    // let file_path = "./tests/mem_timing-2/01-read_timing.gb";
-    // let file_path = "./tests/mem_timing-2/02-write_timing.gb";
-    // let file_path = "./tests/mem_timing-2.gb";
-    // let file_path = "./tests/halt_bug.gb";
-    // let file_path = "./tests/interrupt_time.gb";
-    // let file_path = "./tests/mem_timing-2/01-read_timing.gb";
-    // let file_path = "./tests/mem_timing-2/02-write_timing.gb";
-    // let file_path = "./tests/mem_timing-2.gb";
-    // let file_path = "./tests/cpu_instrs.gb";
-    // let file_path = "./tests/cpu_instrs/01-special.gb";
-    // let file_path = "./tests/cpu_instrs/02-interrupts.gb";
-    // let file_path = "./tests/cpu_instrs/03-op_sp,hl.gb";
-    // let file_path = "./tests/cpu_instrs/04-op r,imm.gb";
-    // let file_path = "./tests/cpu_instrs/05-op rp.gb";
-    // let file_path = "./tests/cpu_instrs/06-ld r,r.gb";
-    // let file_path = "./tests/cpu_instrs/07-jr,jp,call,ret,rst.gb";
-    // let file_path = "./tests/cpu_instrs/08-misc instrs.gb";
-    // let file_path = "./tests/cpu_instrs/09-op r,r.gb";
-    // let file_path = "./tests/cpu_instrs/10-bit ops.gb";
-    // let file_path = "./tests/cpu_instrs/11-op a,(hl).gb";
-    // Init Mem
+    let mut crabby = CrabbyBoy::new(file_path)?;
+    let _audio_output =
+        if let Some((output, sample_rate)) = AudioOutput::new(crabby.audio_buffer.clone()) {
+            // Very important to play sound
+            crabby.set_audio_sample_rate(sample_rate);
+            eprintln!("Audio initialized at {} Hz", sample_rate);
+            Some(output)
+        } else {
+            None
+        };
 
-    let mut crabby = CrabbyBoy::new();
-    crabby.run(file_path)
+    let mut display = RatatuiDisplay::new();
+
+    // We need to target 60 FPS
+    let target_frame = Duration::from_micros(16_667); // ~60FPS
+    let mut last_tick_instant = Instant::now();
+
+    while display.is_running() {
+        let frame_start = Instant::now();
+        let dt = frame_start.duration_since(last_tick_instant);
+        last_tick_instant = frame_start;
+
+        display.handle_events();
+
+        crabby.tick_for_duration(dt);
+
+        display.draw(&crabby);
+
+        let frame_elapsed = frame_start.elapsed();
+        if frame_elapsed < target_frame {
+            std::thread::sleep(target_frame - frame_elapsed);
+        }
+    }
+
+    Ok(())
 }

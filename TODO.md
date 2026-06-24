@@ -1,11 +1,3 @@
-                      an error occur
-red on the output audio stream: Buffer underrun/overrun occurred.
-                                                                 an error occurred on the output audio stream: Buffer underrun/overrun occurred.
-                                                                                                                                                an error occurred on the output audio s
-tream: Buffer underrun/overrun occurred.
-                                        an error occurred on the output audio stream: Buffer underrun/overrun occurred.
-
-
 
 https://github.com/emoon/rust_minifb/blob/master/examples/menu.rs
 
