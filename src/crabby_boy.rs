@@ -47,16 +47,16 @@ impl CrabbyBoy {
 
     pub fn tick_for_duration(&mut self, frame_delta: Duration) {
         let dt = frame_delta.as_secs_f64().clamp(0.001, 0.5);
-        let mut number_of_steps = (RUNTIME_STEPS_PER_SEC * dt) as usize;
+        let number_of_steps = (RUNTIME_STEPS_PER_SEC * dt) as usize;
         for _ in 0..number_of_steps {
             self.tick();
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> bool {
         if self.cpu.stopped {
             println!("CPU STOPPED. Waiting interrupts");
-            return;
+            return false;
         }
         if self.cpu.halt {
             self.bus.internal_tick();
@@ -65,13 +65,15 @@ impl CrabbyBoy {
             if (ie & if_flag) != 0 {
                 self.cpu.halt = false;
             }
-            return;
+            return false;
         }
 
         self.cpu.handle_interrupts(&mut self.bus);
         self.cpu.execute(&mut self.bus);
 
         self.fps.tick();
+
+        true
     }
 
     //     pub fn run(&mut self) -> Result<(), String> {
@@ -184,8 +186,14 @@ macro_rules! cpu_instr_test {
             let mut success = false;
 
             for i in 0..test_max_loop {
+                if crabby.cpu.stopped {
+                    break;
+                }
                 let prev_pc = crabby.cpu.pc;
-                crabby.tick();
+                let cpu_executed = crabby.tick();
+                if (!cpu_executed) {
+                    continue;
+                }
 
                 if crabby.cpu.pc == prev_pc {
                     // Check eram to verify test results
