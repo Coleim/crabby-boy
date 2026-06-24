@@ -75,50 +75,6 @@ impl CrabbyBoy {
 
         true
     }
-
-    //     pub fn run(&mut self) -> Result<(), String> {
-    //         let audio_active = !cfg!(test);
-    //
-    //         // #[cfg(test)]
-    //         // let mut loop_count: u32 = 0;
-    //         loop {
-    //             // #[cfg(test)]
-    //             // {
-    //             //     loop_count = loop_count.wrapping_add(1);
-    //             //     if loop_count > self.test_max_loop {
-    //             //         return Err(format!(
-    //             //             "Infinite Loop. Reaching loop number: {}",
-    //             //             loop_count
-    //             //         ));
-    //             //     }
-    //             // }
-    //
-    //             // #[cfg(test)]
-    //             // let prev_pc = self.cpu.pc;
-    //
-    //             self.tick();
-    //
-    //             // if audio_active {
-    //             //     while self.audio_buffer.lock().unwrap().count() >= 6144 {
-    //             //         // 6144 = nombre de sample minimal
-    //             //         std::thread::sleep(std::time::Duration::from_millis(1));
-    //             //     }
-    //             // }
-    //
-    //             // #[cfg(test)]
-    //             // if self.cpu.pc == prev_pc {
-    //             //     // Check eram to verify test results
-    //             //     if self.check_test_results(&self.bus) {
-    //             //         return Ok(());
-    //             //     } else {
-    //             //         self.log_test_diagnostics(&self.bus);
-    //             //         return Err("Test ROM reported failure".to_string());
-    //             //     }
-    //             // }
-    //         }
-    //
-    //         Ok(())
-    //     }
 }
 
 #[cfg(test)]
@@ -211,44 +167,6 @@ macro_rules! cpu_instr_test {
                 success,
                 "Max loop ({test_max_loop}) reached without satisfying condition"
             );
-
-            // loop {
-            //     {
-            //         loop_count = loop_count.wrapping_add(1);
-            //         if loop_count > self.test_max_loop {
-            //             assert_
-            //             return Err(format!(
-            //                 "Infinite Loop. Reaching loop number: {}",
-            //                 loop_count
-            //             ));
-            //         }
-            //     }
-            //
-            //     #[cfg(test)]
-            //     let prev_pc = self.cpu.pc;
-            //
-            //     self.tick();
-            //
-            //     if audio_active {
-            //         while self.audio_buffer.lock().unwrap().count() >= 6144 {
-            //             // 6144 = nombre de sample minimal
-            //             std::thread::sleep(std::time::Duration::from_millis(1));
-            //         }
-            //     }
-            //
-            //     #[cfg(test)]
-            //     if self.cpu.pc == prev_pc {
-            //         // Check eram to verify test results
-            //         if self.check_test_results(&self.bus) {
-            //             return Ok(());
-            //         } else {
-            //             self.log_test_diagnostics(&self.bus);
-            //             return Err("Test ROM reported failure".to_string());
-            //         }
-            //     }
-            // }
-
-            // assert_eq!(crabby.run(), Ok(()));
         }
     };
 }

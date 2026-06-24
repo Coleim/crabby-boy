@@ -51,15 +51,17 @@ impl AudioOutput {
 
         let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
         let mut last_sample = 0.0_f32;
+        let mut hp_x1 = 0.0; // memorise l'entree precedente
+        let mut hp_y1 = 0.0; // memorise la sortie precedente
+        let hp_cutoff_hz = 20.0;
+        let dt = 1.0 / selected_sample_rate as f32;
+        let rc = 1.0 / (2.0 * std::f32::consts::PI * hp_cutoff_hz);
+        let hp_alpha = rc / (rc + dt);
 
         let stream = device
             .build_output_stream(
                 &config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    // let mut last_sample: f32 = 0.0;
-                    // let mut hp_x1 = 0.0; // memorise l'entree precedente
-                    // let mut hp_y1 = 0.0; // memorise la sortie precedente
-                    // let hp_a = 1.0; // coefficient du filtre
                     let channels = selected_channels as usize;
 
                     if let Ok(mut buf) = buffer.try_lock() {
@@ -67,13 +69,16 @@ impl AudioOutput {
                             if !buf.empty() {
                                 last_sample = buf.pop();
                             }
+
+                            hp_y1 = hp_alpha * (hp_y1 + last_sample - hp_x1);
+                            hp_x1 = last_sample;
                             for out in frame.iter_mut() {
-                                *out = last_sample;
+                                *out = hp_y1;
                             }
                         }
                     } else {
                         for out in data.iter_mut() {
-                            *out = last_sample;
+                            *out = hp_y1;
                         }
                     }
                 },
