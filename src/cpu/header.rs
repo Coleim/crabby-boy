@@ -7,20 +7,20 @@ use super::mappings::size_map::ROM_SIZE_MAP;
 // https://gbdev.io/pandocs/The_Cartridge_Header.html
 
 pub struct CartdrigeHeader {
-    entry_point: u8,
-    nintendo_logo: [u8; 48],
-    title: String,
-    manufacturer_code: String,
-    cgb_flag: String,
-    licensee: String,
-    sgb_flag: String,
-    cartridge_type: String,
-    rom_size: String, // This byte indicates how much ROM is present on the cartridge. In most cases, the ROM size is given by 32 KiB × (1 << <value>):
-    ram_size: String,
-    destination_code: String,
-    version_number: u8,
-    header_checksum: u8, // uint8_t checksum = 0; for (uint16_t address = 0x0134; address <= 0x014C; address++) { checksum = checksum - rom[address] - 1; }
-    global_checksum: u8,
+    pub entry_point: u8,
+    pub nintendo_logo: [u8; 48],
+    pub title: String,
+    pub manufacturer_code: String,
+    pub cgb_flag: String,
+    pub licensee: String,
+    pub sgb_flag: String,
+    pub cartridge_type: String,
+    pub rom_size: String, // This byte indicates how much ROM is present on the cartridge. In most cases, the ROM size is given by 32 KiB × (1 << <value>):
+    pub ram_size: String,
+    pub destination_code: String,
+    pub version_number: u8,
+    pub header_checksum: u8, // uint8_t checksum = 0; for (uint16_t address = 0x0134; address <= 0x014C; address++) { checksum = checksum - rom[address] - 1; }
+    pub global_checksum: u8,
 }
 
 impl CartdrigeHeader {

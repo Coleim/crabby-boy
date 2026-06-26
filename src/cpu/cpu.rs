@@ -120,18 +120,19 @@ impl CPU {
         self.e = e;
     }
 
-    fn get_hl(&self) -> u16 {
+    pub fn get_hl(&self) -> u16 {
         Self::combine_u8(self.h, self.l)
     }
-    fn get_bc(&self) -> u16 {
+    pub fn get_bc(&self) -> u16 {
         Self::combine_u8(self.b, self.c)
     }
-    fn get_af(&self) -> u16 {
+    pub fn get_af(&self) -> u16 {
         Self::combine_u8(self.a, self.f)
     }
-    fn get_de(&self) -> u16 {
+    pub fn get_de(&self) -> u16 {
         Self::combine_u8(self.d, self.e)
     }
+
     fn push_bc(&mut self, bus: &mut Bus) {
         self.push_to_stack(self.get_bc(), bus);
     }

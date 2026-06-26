@@ -3,7 +3,6 @@ mod bus;
 mod cpu;
 mod crabby_boy;
 mod display;
-mod display_interface;
 mod hardware;
 
 use crate::audio::audio_output::AudioOutput;
@@ -24,16 +23,16 @@ fn main() -> Result<(), String> {
     };
 
     let mut crabby = CrabbyBoy::new(file_path)?;
-    let _audio_output =
-        if let Some((output, sample_rate)) = AudioOutput::new(crabby.audio_buffer.clone()) {
-            // Very important to play sound
-            crabby.set_audio_sample_rate(sample_rate);
-            eprintln!("Audio initialized at {} Hz", sample_rate);
-            Some(output)
-        } else {
-            None
-        };
-
+    // let _audio_output =
+    //     if let Some((output, sample_rate)) = AudioOutput::new(crabby.audio_buffer.clone()) {
+    //         // Very important to play sound
+    //         crabby.set_audio_sample_rate(sample_rate);
+    //         eprintln!("Audio initialized at {} Hz", sample_rate);
+    //         Some(output)
+    //     } else {
+    //         None
+    //     };
+    //
     let mut display = RatatuiDisplay::new();
 
     // We need to target 60 FPS
