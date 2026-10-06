@@ -1,0 +1,12 @@
+[book]
+title = "Crabby Boy — Developer Guides"
+description = "Learning notes and implementation guides for the crabby-boy Game Boy emulator"
+authors = ["coliva"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/"
+edit-url-template = "https://github.com/"
