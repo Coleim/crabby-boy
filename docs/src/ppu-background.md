@@ -150,6 +150,44 @@ This is exactly the decoding logic already written in
 working for the VRAM tile viewer. Good news: you don't need to invent this
 part again, just reuse the same formula.
 
+Here it is wrapped into a reusable function — given a tile's **resolved
+data address** (section 3.3 below computes this) and a **screen
+position** to draw it at, it decodes all 8 rows of that tile and writes
+the shaded pixels straight into the frame buffer:
+
+```rust
+/// Decodes one 8x8 tile's pixel data and writes it into the frame buffer
+/// at the given screen position, applying the BGP palette.
+fn draw_tile(
+    vram: &[u8],
+    tile_data_addr: usize,
+    bgp: u8,
+    frame_buffer: &mut [u8],
+    screen_x: usize,
+    screen_y: usize,
+) {
+    for pixel_row in 0..8 {
+        let lo = vram[(tile_data_addr + pixel_row * 2) - 0x8000];
+        let hi = vram[(tile_data_addr + pixel_row * 2 + 1) - 0x8000];
+
+        for pixel_col in 0..8 {
+            let bit = 7 - pixel_col;
+            let color_index = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+            let shade = (bgp >> (color_index * 2)) & 0b11; // section 3.5
+
+            let x = screen_x + pixel_col;
+            let y = screen_y + pixel_row;
+            frame_buffer[y * 160 + x] = shade;
+        }
+    }
+}
+```
+
+Notice this function doesn't know or care *why* it's being called — it
+just draws one tile at one screen position. That's deliberate: section 4
+calls it from a naive full-screen loop, and it's just as usable later
+from inside the real per-dot fetcher (section 5).
+
 Reference: <https://gbdev.io/pandocs/Tile_Data.html>
 
 ### 3.3 Finding a tile's address from its index
@@ -178,6 +216,21 @@ index number into a memory address, and the game picks which one via
 Why does this exist? Historical hardware reasons — both modes overlap in
 the memory range `$8800`–`$97FF`, which is shared. You don't need to know
 why, just that you must check LCDC bit 4 before computing the address.
+
+As a reusable function:
+
+```rust
+/// Resolves a tile index to its tile data address, per LCDC bit 4.
+fn resolve_tile_data_addr(tile_index: u8, lcdc: u8) -> usize {
+    if lcdc & 0b0001_0000 != 0 {
+        // Unsigned addressing mode
+        0x8000 + (tile_index as usize) * 16
+    } else {
+        // Signed addressing mode
+        (0x9000_i32 + (tile_index as i8 as i32) * 16) as usize
+    }
+}
+```
 
 Reference: <https://gbdev.io/pandocs/Tile_Data.html> — see "Addressing
 modes."
@@ -228,26 +281,44 @@ Reference: <https://gbdev.io/pandocs/Palettes.html>
 ## 4. Putting it together: the simple (but wrong) way
 
 Just to build intuition, here's the "obvious but not how hardware really
-does it" way to render one scanline, in plain steps, for a fixed `y =
-current line number` and for each `x` from 0 to 159:
+does it" way to render an entire frame: loop over every **tile** that
+fits on screen (not every pixel), look up its index in the tile map,
+resolve and draw it, using the two functions from sections 3.2 and 3.3:
 
-1. `bg_x, bg_y` = apply SCX/SCY scrolling ([section 3.4](#34-scrolling-scx--scy)).
-2. `tile_col = bg_x / 8`, `tile_row = bg_y / 8` — which tile in the 32x32
-   grid.
-3. `pixel_col = bg_x % 8`, `pixel_row = bg_y % 8` — which pixel inside that
-   8x8 tile.
-4. Read the tile index byte from the tile map ([section 3.1](#31-the-tile-map))
-   at `tile_row * 32 + tile_col`.
-5. Resolve that index to a tile data address ([section 3.3](#33-finding-a-tiles-address-from-its-index)).
-6. Read the 2 bytes for row `pixel_row` of that tile.
-7. Extract the color index for column `pixel_col` ([section 3.2](#32-the-tile-data-the-actual-pixel-shapes)'s formula).
-8. Map through BGP to get the final shade ([section 3.5](#35-the-palette-bgp)).
-9. Store the shade at `frame_buffer[y * 160 + x]`.
+```rust
+let tile_map_base: usize = 0x9800; // section 3.1 — assumes LCDC bit 3 = 0
 
-This produces a correct image! But it has one problem: it computes
-everything for one line **all at once**, which is **not what the real PPU
+for tile_row in 0..18 {       // 144 / 8 = 18 tile rows fit on screen
+    for tile_col in 0..20 {   // 160 / 8 = 20 tile columns fit on screen
+        let offset = tile_row * 32 + tile_col;
+        let tile_index = vram[(tile_map_base + offset) - 0x8000];
+        let tile_data_addr = resolve_tile_data_addr(tile_index, lcdc); // section 3.3
+
+        draw_tile(vram, tile_data_addr, bgp, &mut frame_buffer, tile_col * 8, tile_row * 8); // section 3.2
+    }
+}
+```
+
+A few things worth noting about this example:
+
+- `18` and `20`, not `144`/`160` — this loops over **tiles that fit on
+  screen**, not individual pixels. Each iteration handles an entire 8x8
+  block at once, via `draw_tile`.
+- This ignores `SCX`/`SCY` scrolling entirely (assumes both are 0, and
+  always reads tile map 1) — fine as a true "naive first scene" starting
+  point, but you'd revisit this (applying section 3.4's formulas before
+  computing `tile_row`/`tile_col`) once scrolling matters.
+- For a single static frame, this produces the exact same pixels as a
+  pixel-by-pixel loop that recomputes `tile_row = y / 8` /
+  `tile_col = x / 8` for every one of the 160x144 pixels individually —
+  it's just less redundant, since each tile's lookup/decode happens once
+  here instead of 64 times.
+
+This produces a correct image! But it has one deeper problem: it computes
+the **entire frame** all at once, which is **not what the real PPU
 hardware does**. Real hardware produces pixels one at a time, gradually,
-during Mode 3's 172 dots. We want to build the real mechanism, because:
+line by line, during each line's Mode 3 (172 dots). We want to build the
+real mechanism, because:
 
 - It's genuinely not much harder.
 - It's the actual architecture you'll need later for window/sprites.
@@ -277,43 +348,100 @@ Reference: <https://gbdev.io/pandocs/pixel_fifo.html>
 
 ### 5.1 The Fetcher's 5 steps
 
-The fetcher repeats this cycle of 5 steps, forever, during Mode 3:
+The fetcher repeats this cycle of 5 steps, forever, during Mode 3. Here's
+the state it needs, and a sketch of each step as code, reusing
+`resolve_tile_data_addr` from section 3.3:
 
-1. **Get Tile** (2 dots): figure out which tile index covers the current
-   position ([section 3.1](#31-the-tile-map)), read it, remember it.
-2. **Get Tile Data Low** (2 dots): using the tile index from step 1,
-   resolve the address ([section 3.3](#33-finding-a-tiles-address-from-its-index))
-   and read the **first** of the 2 bytes for the correct row.
-3. **Get Tile Data High** (2 dots): read the **second** byte (same address
-   + 1).
-4. **Sleep** (2 dots): do nothing. (This exists on real hardware for
-   timing reasons; we just wait.)
-5. **Push**: try to push the 8 decoded pixels (using the formula from
-   [section 3.2](#32-the-tile-data-the-actual-pixel-shapes), applied to
-   all 8 columns of this tile row) into the FIFO. This only succeeds if
-   the FIFO is currently empty. If it fails, this step is retried every
-   dot until the FIFO does become empty, at which point the push happens
-   and the fetcher starts back over at step 1 for the **next** tile to
-   the right.
+```rust
+enum FetcherStep { GetTile, GetTileDataLow, GetTileDataHigh, Sleep, Push }
 
-So: 2+2+2+2 = 8 dots minimum per tile (plus possibly extra dots stuck
-retrying "Push" if the FIFO hasn't emptied yet).
+struct Ppu {
+    bg_fifo: VecDeque<u8>,       // pending color indices (0-3)
+    fetcher_step: FetcherStep,
+    fetcher_tile_col: u8,        // which tile map column we're fetching (0-31)
+    tile_index: u8,              // scratch: tile index just read
+    tile_data_lo: u8,            // scratch: low byte of the tile row
+    tile_data_hi: u8,            // scratch: high byte of the tile row
+    lcd_x: u8,                   // next screen column to output (0-159)
+    lcd_y_coord: u8,             // current scanline (LY)
+    scx: u8,
+    scy: u8,
+    lcdc: u8,
+    bgp: u8,
+    // ... dots, mode, etc. from the minimal PPU you already have
+}
+
+fn tick_fetcher(ppu: &mut Ppu, vram: &[u8]) {
+    match ppu.fetcher_step {
+        FetcherStep::GetTile => {
+            // section 3.1: which tile map, which row/col
+            let tile_map_base: usize = if ppu.lcdc & 0b0000_1000 != 0 { 0x9C00 } else { 0x9800 };
+            let tile_row = ((ppu.lcd_y_coord as u16 + ppu.scy as u16) % 256) / 8;
+            let offset = tile_row as usize * 32 + ppu.fetcher_tile_col as usize;
+            ppu.tile_index = vram[(tile_map_base + offset) - 0x8000];
+            ppu.fetcher_step = FetcherStep::GetTileDataLow;
+        }
+        FetcherStep::GetTileDataLow => {
+            let addr = resolve_tile_data_addr(ppu.tile_index, ppu.lcdc); // section 3.3
+            let row = (ppu.lcd_y_coord as u16 + ppu.scy as u16) % 8;
+            ppu.tile_data_lo = vram[(addr + row as usize * 2) - 0x8000];
+            ppu.fetcher_step = FetcherStep::GetTileDataHigh;
+        }
+        FetcherStep::GetTileDataHigh => {
+            let addr = resolve_tile_data_addr(ppu.tile_index, ppu.lcdc);
+            let row = (ppu.lcd_y_coord as u16 + ppu.scy as u16) % 8;
+            ppu.tile_data_hi = vram[(addr + row as usize * 2 + 1) - 0x8000];
+            ppu.fetcher_step = FetcherStep::Sleep;
+        }
+        FetcherStep::Sleep => {
+            ppu.fetcher_step = FetcherStep::Push;
+        }
+        FetcherStep::Push => {
+            if ppu.bg_fifo.is_empty() {
+                // same 2bpp decode formula as draw_tile (section 3.2),
+                // just pushed into the FIFO instead of written directly
+                for pixel_col in 0..8 {
+                    let bit = 7 - pixel_col;
+                    let color_index = ((ppu.tile_data_hi >> bit) & 1) << 1 | ((ppu.tile_data_lo >> bit) & 1);
+                    ppu.bg_fifo.push_back(color_index);
+                }
+                ppu.fetcher_tile_col = (ppu.fetcher_tile_col + 1) & 0x1F;
+                ppu.fetcher_step = FetcherStep::GetTile;
+            }
+            // if the FIFO wasn't empty, stay on this step and retry next dot
+        }
+    }
+}
+```
+
+Each of `GetTile`, `GetTileDataLow`, `GetTileDataHigh`, and `Sleep` takes 2
+dots (so in practice you'd only actually advance the state machine every
+other dot — simplified here for clarity). `Push` is attempted every dot
+until it succeeds. So: 2+2+2+2 = 8 dots minimum per tile, plus possibly
+extra dots stuck retrying `Push` if the FIFO hasn't emptied yet.
 
 ### 5.2 Every dot, independently: try to output a pixel
 
 At the same time as the fetcher is doing its thing, **every single dot**
 during Mode 3, this also happens:
 
-- If the FIFO has at least one pixel in it: pop one off, convert it to a
-  final shade using BGP ([section 3.5](#35-the-palette-bgp)), write it to
-  `frame_buffer[y * 160 + current_x]`, then move `current_x` one pixel to
-  the right.
-- If the FIFO is empty: do nothing this dot (the screen just waits for the
-  fetcher to catch up).
+```rust
+fn output_pixel(ppu: &mut Ppu, frame_buffer: &mut [u8]) {
+    if let Some(color_index) = ppu.bg_fifo.pop_front() {
+        let shade = (ppu.bgp >> (color_index * 2)) & 0b11; // section 3.5
+        let y = ppu.lcd_y_coord as usize;
+        let x = ppu.lcd_x as usize;
+        frame_buffer[y * 160 + x] = shade;
+        ppu.lcd_x += 1;
+    }
+    // if the FIFO was empty, do nothing this dot — the screen waits for
+    // the fetcher to catch up
+}
+```
 
-Once `current_x` reaches 160, this line's drawing is done — switch to
-Mode 0 (HBlank) immediately, regardless of what the fetcher is mid-way
-through doing.
+Once `lcd_x` reaches 160, this line's drawing is done — switch to Mode 0
+(HBlank) immediately, regardless of what the fetcher is mid-way through
+doing.
 
 ### 5.3 Why bother with this instead of the simple way?
 
