@@ -10,7 +10,7 @@ use crate::display::fps_counter::FpsCounter;
 const RUNTIME_STEPS_PER_SEC: f64 = 400_000.0;
 
 pub struct CrabbyBoy {
-    fps: FpsCounter,
+    pub fps: FpsCounter,
     pub bus: Bus,
     pub audio_buffer: Arc<Mutex<AudioBuffer>>,
     pub header: CartdrigeHeader,

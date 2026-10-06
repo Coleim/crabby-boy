@@ -1,5 +1,5 @@
-use crate::{cpu::header::CartdrigeHeader, crabby_boy::CrabbyBoy};
-use ratatui::style::{Color, Stylize};
+use crate::cpu::header::CartdrigeHeader;
+use ratatui::style::Stylize;
 use ratatui::widgets::Padding;
 use ratatui::{
     Frame,

@@ -19,7 +19,8 @@ fn main() -> Result<(), String> {
     let file_path = if args.len() > 1 {
         &args[1]
     } else {
-        "./tests/Kirby.gb"
+        // "./tests/Kirby.gb"
+        "./tests/Tetris.gb"
     };
 
     let mut crabby = CrabbyBoy::new(file_path)?;

@@ -96,35 +96,6 @@ Example:
 
 #### Step 4.4: Graphics Library Setup
 
-**Recommended Rust crates:**
-
-**Option 1: minifb** (simplest)
-```toml
-[dependencies]
-minifb = "0.25"
-```
-- Easy to use
-- Just need a pixel buffer
-- Good for learning
-
-**Option 2: pixels** (modern)
-```toml
-[dependencies]
-pixels = "0.13"
-winit = "0.29"
-```
-- More features
-- Better performance
-- Active development
-
-**Option 3: SDL2** (traditional)
-```toml
-[dependencies]
-sdl2 = "0.37"
-```
-- Industry standard
-- More complex setup
-- Lots of features
 
 **Basic rendering concept:**
 ```rust

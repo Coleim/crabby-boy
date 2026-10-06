@@ -16,6 +16,8 @@ pub struct CPU {
     pub halt_bug: bool,
     pub ime: bool,
     pub ime_pending: bool,
+    pub current_opcode: u8,
+    pub current_cbopcode: u8,
 }
 
 impl CPU {
@@ -36,6 +38,8 @@ impl CPU {
             halt_bug: false,
             ime: false,
             ime_pending: false,
+            current_opcode: 0,
+            current_cbopcode: 0,
         }
     }
 
@@ -68,16 +72,16 @@ impl CPU {
         }
     }
 
-    fn get_z(&self) -> bool {
+    pub fn get_z(&self) -> bool {
         self.f & 0x80 != 0
     }
-    fn get_n(&self) -> bool {
+    pub fn get_n(&self) -> bool {
         self.f & 0x40 != 0
     }
-    fn get_h(&self) -> bool {
+    pub fn get_h(&self) -> bool {
         self.f & 0x20 != 0
     }
-    fn get_c(&self) -> bool {
+    pub fn get_c(&self) -> bool {
         self.f & 0x10 != 0
     }
 
@@ -399,6 +403,7 @@ impl CPU {
         }
 
         let opcode: u8 = bus.read(self.pc);
+        self.current_opcode = opcode;
 
         let mut next_pc: u16 = if self.halt_bug {
             println!("HALT BUG  PC: {:02x}", self.pc);
@@ -1085,6 +1090,7 @@ impl CPU {
     }
     fn execute_cb(&mut self, bus: &mut Bus, current_pc: u16) -> bool {
         let opcode = bus.read(current_pc);
+        self.current_opcode = opcode;
         let next_pc = current_pc.wrapping_add(1);
 
         let category: u8 = opcode >> 6; // 1100 0000 -> 0000 0011

@@ -32,7 +32,7 @@ pub fn render(frame: &mut Frame, area: Rect) {
 
     let picker = Picker::from_query_stdio().expect("impossible de détecter le terminal");
     let image = picker
-        .new_protocol(dyn_img, size, Resize::Fit(None))
+        .new_protocol(dyn_img, size, Resize::Scale(None))
         .unwrap();
 
     let image = Image::new(&image);

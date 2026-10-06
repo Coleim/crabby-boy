@@ -17,7 +17,7 @@ use crate::{audio::audio_buffer::AudioBuffer, bus::iobridge::IOBridge};
 // FFFF	FFFF	Interrupt Enable register (IE)
 pub struct Bus {
     rom: Vec<u8>, // full ROM, any size
-    vram: [u8; 0x2000],
+    pub vram: [u8; 0x2000],
     eram: [u8; 0x2000],
     wram: [u8; 0x2000],
     oam: [u8; 0x2000],

@@ -11,7 +11,7 @@ use ratatui::{
 
 use crate::{
     crabby_boy::CrabbyBoy,
-    display::{cartridge_header, display::Display, game, registers},
+    display::{cartridge_header, cpu_registers, display::Display, game, vram_registers},
 };
 
 pub struct RatatuiDisplay {
@@ -28,7 +28,8 @@ impl RatatuiDisplay {
     }
 
     fn draw_ui(frame: &mut Frame, emulator: &CrabbyBoy) {
-        let title = Line::from("CRABBY BOY");
+        let fps = emulator.fps.fps();
+        let title = Line::from(format!("CRABBY BOY ({}) FPS", fps));
         let block = Block::bordered()
             .title(title.centered())
             .style(Style::new().red());
@@ -39,11 +40,14 @@ impl RatatuiDisplay {
         let [left, middle, right] = inner_area.layout(&horizontal);
 
         let [l_top, l_vmiddle, l_bottom] = left.layout(&vertical);
+        let [m_top, m_vmiddle, m_bottom] = middle.layout(&vertical);
 
         frame.render_widget(block, frame.area());
         cartridge_header::render(frame, l_top, &emulator.header);
         game::render(frame, l_vmiddle);
-        registers::render(frame, l_bottom, &emulator.cpu);
+        cpu_registers::render(frame, l_bottom, &emulator.cpu);
+
+        vram_registers::render(frame, m_top, &emulator.bus.vram);
     }
 }
 
