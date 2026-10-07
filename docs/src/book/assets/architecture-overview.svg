@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-dashed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="900" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="700" y="32" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">Architecture matérielle de la Game Boy (DMG)</text>
+  <text x="700" y="52" text-anchor="middle" font-size="13" font-style="italic" fill="#64748b">Vue d'ensemble des puces réelles de la console et de leurs bus</text>
+
+  <!-- ===================== CARTRIDGE ===================== -->
+  <rect x="40" y="78" width="360" height="400" rx="12" fill="#fafaf9" stroke="#78716c" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="58" y="102" font-size="14" font-weight="700" fill="#44403c">Cartouche de jeu — hardware externe</text>
+
+  <rect x="65" y="118" width="310" height="66" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="220" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">ROM — banque 0 (fixe)</text>
+  <text x="220" y="159" text-anchor="middle" font-size="10.5" fill="#475569">0x0000–0x3FFF</text>
+
+  <rect x="65" y="196" width="310" height="66" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="220" y="218" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">ROM — banque commutable</text>
+  <text x="220" y="235" text-anchor="middle" font-size="10.5" fill="#475569">0x4000–0x7FFF (choisie par le MBC)</text>
+
+  <rect x="65" y="274" width="310" height="54" rx="8" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.3"/>
+  <text x="220" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#312e81">Puce MBC (Memory Bank Controller)</text>
+  <text x="220" y="313" text-anchor="middle" font-size="10.5" fill="#3730a3">sélectionne la banque ROM/RAM active</text>
+
+  <rect x="65" y="340" width="310" height="66" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="220" y="362" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">RAM externe (optionnelle)</text>
+  <text x="220" y="379" text-anchor="middle" font-size="10.5" fill="#475569">0xA000–0xBFFF · parfois sauvegardée par pile</text>
+
+  <!-- Cartridge edge connector -> bus -->
+  <path d="M 375 373 C 410 373, 420 290, 458 276" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="392" y="415" font-size="10.5" fill="#44403c" font-style="italic">connecteur en bord de carte</text>
+
+  <!-- ===================== CONSOLE ===================== -->
+  <rect x="430" y="78" width="930" height="700" rx="12" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="448" y="102" font-size="14" font-weight="700" fill="#334155">Console Game Boy (DMG)</text>
+
+  <!-- CPU -->
+  <rect x="610" y="118" width="280" height="104" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="750" y="140" text-anchor="middle" font-size="14" font-weight="700" fill="#1e3a8a">CPU — Sharp LR35902</text>
+  <text x="750" y="158" text-anchor="middle" font-size="11" fill="#1e3a8a" font-family="Consolas, Menlo, monospace">registres A F B C D E H L</text>
+  <text x="750" y="175" text-anchor="middle" font-size="11" fill="#1e3a8a">SP (pointeur de pile) · PC (compteur de programme)</text>
+  <text x="750" y="192" text-anchor="middle" font-size="11" fill="#1e3a8a">boucle fetch → decode → execute, cycle par cycle</text>
+
+  <line x1="750" y1="222" x2="750" y2="258" stroke="#334155" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Main system bus -->
+  <rect x="460" y="258" width="870" height="32" rx="6" fill="#1e293b"/>
+  <text x="895" y="279" text-anchor="middle" font-size="12" font-weight="600" fill="#f8fafc">Bus système — adresses 0x0000–0xFFFF (bus d'adresses 16 bits + bus de données 8 bits)</text>
+
+  <!-- Memory row -->
+  <g>
+    <line x1="563" y1="290" x2="563" y2="316" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="784" y1="290" x2="784" y2="316" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="1005" y1="290" x2="1005" y2="316" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="1226" y1="290" x2="1226" y2="316" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="460" y="316" width="207" height="80" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+    <text x="563" y="340" text-anchor="middle" font-size="12.5" font-weight="700" fill="#334155">VRAM</text>
+    <text x="563" y="357" text-anchor="middle" font-size="10" fill="#475569">0x8000–0x9FFF</text>
+    <text x="563" y="372" text-anchor="middle" font-size="10" fill="#475569">tuiles &amp; tilemaps — lue par le PPU</text>
+
+    <rect x="681" y="316" width="207" height="80" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+    <text x="784" y="340" text-anchor="middle" font-size="12.5" font-weight="700" fill="#334155">WRAM</text>
+    <text x="784" y="357" text-anchor="middle" font-size="10" fill="#475569">0xC000–0xDFFF</text>
+    <text x="784" y="372" text-anchor="middle" font-size="10" fill="#475569">RAM de travail à usage général</text>
+
+    <rect x="902" y="316" width="207" height="80" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+    <text x="1005" y="340" text-anchor="middle" font-size="12.5" font-weight="700" fill="#334155">OAM</text>
+    <text x="1005" y="357" text-anchor="middle" font-size="10" fill="#475569">0xFE00–0xFE9F</text>
+    <text x="1005" y="372" text-anchor="middle" font-size="10" fill="#475569">attributs de sprites — lue par le PPU</text>
+
+    <rect x="1123" y="316" width="207" height="80" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.3"/>
+    <text x="1226" y="340" text-anchor="middle" font-size="12.5" font-weight="700" fill="#334155">HRAM</text>
+    <text x="1226" y="357" text-anchor="middle" font-size="10" fill="#475569">0xFF80–0xFFFE</text>
+    <text x="1226" y="372" text-anchor="middle" font-size="10" fill="#475569">RAM rapide, pile et variables</text>
+  </g>
+
+  <!-- Secondary I/O bus -->
+  <line x1="1300" y1="396" x2="1300" y2="426" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <rect x="460" y="426" width="870" height="24" rx="5" fill="#334155"/>
+  <text x="895" y="443" text-anchor="middle" font-size="11" fill="#f1f5f9">Registres I/O mappés en mémoire — 0xFF00–0xFF7F (+ 0xFFFF pour IE)</text>
+
+  <!-- Peripheral row -->
+  <g>
+    <line x1="527" y1="450" x2="527" y2="462" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="674" y1="450" x2="674" y2="462" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="821" y1="450" x2="821" y2="462" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="968" y1="450" x2="968" y2="462" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="1115" y1="450" x2="1115" y2="462" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="1262" y1="450" x2="1262" y2="462" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="460" y="462" width="135" height="80" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.3"/>
+    <text x="527" y="484" text-anchor="middle" font-size="12" font-weight="700" fill="#713f12">Joypad</text>
+    <text x="527" y="500" text-anchor="middle" font-size="9.5" fill="#854d0e">0xFF00</text>
+    <text x="527" y="514" text-anchor="middle" font-size="9.5" fill="#854d0e">état des boutons</text>
+
+    <rect x="607" y="462" width="135" height="80" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.3"/>
+    <text x="674" y="484" text-anchor="middle" font-size="12" font-weight="700" fill="#713f12">Port série</text>
+    <text x="674" y="500" text-anchor="middle" font-size="9.5" fill="#854d0e">0xFF01–0xFF02</text>
+    <text x="674" y="514" text-anchor="middle" font-size="9.5" fill="#854d0e">liaison filaire (link cable)</text>
+
+    <rect x="754" y="462" width="135" height="80" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.3"/>
+    <text x="821" y="484" text-anchor="middle" font-size="12" font-weight="700" fill="#713f12">Timer</text>
+    <text x="821" y="500" text-anchor="middle" font-size="9.5" fill="#854d0e">0xFF04–0xFF07</text>
+    <text x="821" y="514" text-anchor="middle" font-size="9.5" fill="#854d0e">DIV, TIMA, TMA, TAC</text>
+
+    <rect x="901" y="462" width="135" height="80" rx="8" fill="#fff7ed" stroke="#c2410c" stroke-width="1.3"/>
+    <text x="968" y="482" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7c2d12">Contrôleur</text>
+    <text x="968" y="495" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7c2d12">d'interruptions</text>
+    <text x="968" y="511" text-anchor="middle" font-size="9.5" fill="#9a3412">IE 0xFFFF · IF 0xFF0F</text>
+
+    <rect x="1048" y="462" width="135" height="80" rx="8" fill="#fae8ff" stroke="#a21caf" stroke-width="1.3"/>
+    <text x="1115" y="484" text-anchor="middle" font-size="12" font-weight="700" fill="#701a75">APU (son)</text>
+    <text x="1115" y="500" text-anchor="middle" font-size="9.5" fill="#86198f">0xFF10–0xFF26</text>
+    <text x="1115" y="514" text-anchor="middle" font-size="9.5" fill="#86198f">4 canaux + mixeur</text>
+
+    <rect x="1195" y="462" width="135" height="80" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="1.3"/>
+    <text x="1262" y="484" text-anchor="middle" font-size="12" font-weight="700" fill="#7c2d12">PPU (vidéo)</text>
+    <text x="1262" y="500" text-anchor="middle" font-size="9.5" fill="#9a3412">0xFF40–0xFF4B</text>
+    <text x="1262" y="514" text-anchor="middle" font-size="9.5" fill="#9a3412">dessine une ligne à la fois</text>
+  </g>
+
+  <!-- IRQ lines converging into the interrupt controller -->
+  <path d="M 527 542 L 527 556 L 1262 556 L 1262 542" fill="none" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <line x1="821" y1="542" x2="821" y2="556" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <line x1="968" y1="556" x2="968" y2="542" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arrow-dashed)"/>
+  <rect x="820" y="565" width="630" height="14" fill="#ffffff"/>
+  <text x="895" y="576" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">lignes de requête d'interruption (IRQ) : Joypad, Timer, PPU → Contrôleur d'interruptions</text>
+
+  <!-- Interrupt controller -> CPU (routed below the peripheral row and output icons, then up the right margin, to avoid crossing any block) -->
+  <path d="M 968 542 L 968 566 L 1352 566 L 1352 170 L 892 170" fill="none" stroke="#64748b" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrow-dashed)"/>
+  <text x="1362" y="368" font-size="10" fill="#64748b" font-style="italic" transform="rotate(-90 1362 368)">le CPU consulte IE &amp; IF entre chaque instruction</text>
+
+  <!-- ===================== OUTPUTS / PERIPHERALS OUTSIDE THE CHIP ===================== -->
+  <!-- Buttons -> Joypad -->
+  <rect x="460" y="612" width="135" height="86" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="1.3"/>
+  <text x="527" y="636" text-anchor="middle" font-size="11.5" font-weight="700" fill="#78350f">Boutons physiques</text>
+  <text x="527" y="652" text-anchor="middle" font-size="9.5" fill="#92400e">croix directionnelle</text>
+  <text x="527" y="665" text-anchor="middle" font-size="9.5" fill="#92400e">A · B · Start · Select</text>
+  <line x1="527" y1="612" x2="527" y2="546" stroke="#334155" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- Serial <-> link cable -->
+  <rect x="607" y="612" width="135" height="86" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="1.3"/>
+  <text x="674" y="640" text-anchor="middle" font-size="11.5" font-weight="700" fill="#78350f">Port lien</text>
+  <text x="674" y="656" text-anchor="middle" font-size="9.5" fill="#92400e">(link cable, optionnel)</text>
+  <text x="674" y="669" text-anchor="middle" font-size="9.5" fill="#92400e">vers une 2e console</text>
+  <line x1="674" y1="612" x2="674" y2="546" stroke="#334155" stroke-width="1.3" stroke-dasharray="4 3"/>
+
+  <!-- APU -> speaker -->
+  <rect x="1048" y="612" width="135" height="86" rx="8" fill="#fdf4ff" stroke="#a21caf" stroke-width="1.3"/>
+  <text x="1115" y="648" text-anchor="middle" font-size="20">🔊</text>
+  <text x="1115" y="672" text-anchor="middle" font-size="11" fill="#701a75">Haut-parleur</text>
+  <line x1="1115" y1="546" x2="1115" y2="612" stroke="#a21caf" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- PPU -> LCD -->
+  <rect x="1195" y="612" width="135" height="116" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.3"/>
+  <text x="1262" y="645" text-anchor="middle" font-size="20">🖥️</text>
+  <text x="1262" y="668" text-anchor="middle" font-size="11" font-weight="700" fill="#7c2d12">Écran LCD</text>
+  <text x="1262" y="682" text-anchor="middle" font-size="9.5" fill="#9a3412">160×144 px</text>
+  <text x="1262" y="695" text-anchor="middle" font-size="9.5" fill="#9a3412">4 teintes de gris</text>
+  <line x1="1262" y1="546" x2="1262" y2="612" stroke="#ea580c" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- Legend -->
+  <g font-size="11" fill="#334155">
+    <line x1="700" y1="818" x2="730" y2="818" stroke="#334155" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="738" y="822">connexion de bus (adresses / données)</text>
+    <line x1="700" y1="838" x2="730" y2="838" stroke="#64748b" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrow-dashed)"/>
+    <text x="738" y="842">signal de contrôle / interruption</text>
+  </g>
+</svg>

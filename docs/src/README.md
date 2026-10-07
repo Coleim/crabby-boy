@@ -1,5 +1,10 @@
 # Guides du développeur Crabby Boy
 
+> **⚠ Portée du projet** : `crabby-boy` émule uniquement la Game Boy
+> originale (DMG). La Game Boy Color (CGB), la Game Boy Advance, et toute
+> autre variante ne sont pas couvertes, ni par le code ni par cette
+> documentation.
+
 Ceci est une petite collection de guides à visée pédagogique écrits en
 construisant [crabby-boy](https://github.com/), un émulateur Game Boy, dans
 un but d'apprentissage.

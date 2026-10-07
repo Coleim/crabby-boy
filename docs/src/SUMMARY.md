@@ -50,7 +50,9 @@
   - [23. Découpler la vitesse d'émulation du rafraîchissement de l'affichage](./book/23-decoupling-tick-from-display.md)
   - [24. Un filtre passe-haut pour un son plus propre](./book/24-audio-high-pass-filter.md)
   - [25. Afficher les registres CPU et les infos de la cartouche](./book/25-terminal-ui-registers-header.md)
-  - [26. Visualiser la VRAM](./book/26-vram-tile-viewer.md)
 
 - [Partie IX — Retour au PPU]()
+  - [26. Visualiser la VRAM](./book/26-vram-tile-viewer.md)
   - [27. Où nous avons laissé le PPU, et ce qui vient ensuite](./book/27-back-to-the-ppu.md)
+  - [28. Le balayage ligne par ligne](./book/28-ppu-scanline-timing.md)
+  - [29. Les trois couches de rendu](./book/29-ppu-rendering-layers.md)

@@ -115,4 +115,5 @@ est en soi une compétence utile.
 - Pas de défilement (`SCX`/`SCY`), pas de palette (`BGP`), pas de fenêtre
   (window), pas de sprites — tous explicitement hors du champ de cet
   outil de débogage brut, et tous repris correctement dans le regard vers
-  l'avenir du dernier chapitre.
+  l'avenir du chapitre 27, puis dans les chapitres 28-29 et le guide
+  [PPU — Background Rendering Guide](../ppu-background.md).

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 760" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1300" height="760" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="650" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Les trois couches de rendu, empilées de l'arrière vers l'avant</text>
+  <text x="650" y="52" text-anchor="middle" font-size="12.5" font-style="italic" fill="#64748b">Chaque pixel final est le résultat de la superposition de ces 3 couches, dans cet ordre</text>
+
+  <!-- ============== 3 skewed "3D" planes, back to front ============== -->
+  <!-- Background plane (furthest back, highest, most offset) -->
+  <g>
+    <polygon points="160,210 620,210 700,360 240,360" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+    <!-- simple tile grid inside to suggest a tilemap -->
+    <g stroke="#cbd5e1" stroke-width="1">
+      <line x1="252" y1="240" x2="632" y2="240"/>
+      <line x1="264" y1="270" x2="644" y2="270"/>
+      <line x1="276" y1="300" x2="656" y2="300"/>
+      <line x1="288" y1="330" x2="668" y2="330"/>
+      <line x1="300" y1="216" x2="372" y2="354"/>
+      <line x1="380" y1="216" x2="452" y2="354"/>
+      <line x1="460" y1="216" x2="532" y2="354"/>
+      <line x1="540" y1="216" x2="612" y2="354"/>
+    </g>
+    <text x="430" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">1. Background</text>
+  </g>
+
+  <!-- Window plane (middle) -->
+  <g>
+    <polygon points="330,300 650,300 700,420 380,420" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+    <g stroke="#bae6fd" stroke-width="1">
+      <line x1="400" y1="330" x2="670" y2="330"/>
+      <line x1="410" y1="360" x2="680" y2="360"/>
+      <line x1="420" y1="390" x2="690" y2="390"/>
+    </g>
+    <text x="540" y="292" text-anchor="middle" font-size="13" font-weight="700" fill="#075985">2. Window</text>
+  </g>
+
+  <!-- Objects plane (frontmost, lowest, closest) -->
+  <g>
+    <polygon points="520,400 780,400 820,500 560,500" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <!-- a couple of "sprite" squares -->
+    <rect x="600" y="425" width="34" height="34" fill="#fdba74" stroke="#c2410c" stroke-width="1.2"/>
+    <rect x="660" y="440" width="34" height="34" fill="#fdba74" stroke="#c2410c" stroke-width="1.2"/>
+    <text x="675" y="392" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">3. Objects (sprites)</text>
+  </g>
+
+  <!-- Composition arrow down to final screen -->
+  <line x1="660" y1="500" x2="660" y2="560" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="675" y="535" font-size="11.5" fill="#334155">composées</text>
+  <text x="675" y="550" font-size="11.5" fill="#334155">en un pixel</text>
+
+  <!-- Final composited screen -->
+  <rect x="520" y="565" width="280" height="95" rx="6" fill="#0f172a"/>
+  <text x="660" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#f8fafc">Écran final (160×144)</text>
+  <text x="660" y="616" text-anchor="middle" font-size="10.5" fill="#cbd5e1">background + window + objects</text>
+  <text x="660" y="632" text-anchor="middle" font-size="10.5" fill="#cbd5e1">assemblés pixel par pixel</text>
+  <text x="660" y="648" text-anchor="middle" font-size="10.5" fill="#cbd5e1">par le pixel FIFO (voir ppu-background.md)</text>
+
+  <!-- ============== Description panels on the right ============== -->
+  <g>
+    <rect x="880" y="96" width="340" height="140" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="900" y="122" font-size="13" font-weight="700" fill="#334155">Background</text>
+    <text x="900" y="144" font-size="11" fill="#475569">Une tilemap (grille de tiles) qui</text>
+    <text x="900" y="162" font-size="11" fill="#475569">peut scroller globalement via les</text>
+    <text x="900" y="180" font-size="11" fill="#475569">registres hardware `SCX`/`SCY`.</text>
+    <text x="900" y="204" font-size="11" fill="#475569">Toujours présent, couvre tout</text>
+    <text x="900" y="222" font-size="11" fill="#475569">l'écran en arrière-plan.</text>
+  </g>
+
+  <g>
+    <rect x="880" y="252" width="340" height="140" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.2"/>
+    <text x="900" y="278" font-size="13" font-weight="700" fill="#075985">Window</text>
+    <text x="900" y="300" font-size="11" fill="#0369a1">Un second « background », sans</text>
+    <text x="900" y="318" font-size="11" fill="#0369a1">transparence, toujours rectangulaire</text>
+    <text x="900" y="336" font-size="11" fill="#0369a1">et positionné via `WX`/`WY`.</text>
+    <text x="900" y="360" font-size="11" fill="#0369a1">Utile pour une barre de statut</text>
+    <text x="900" y="378" font-size="11" fill="#0369a1">fixe qui ne doit jamais scroller.</text>
+  </g>
+
+  <g>
+    <rect x="880" y="408" width="340" height="150" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.2"/>
+    <text x="900" y="434" font-size="13" font-weight="700" fill="#7c2d12">Objects (sprites)</text>
+    <text x="900" y="456" font-size="11" fill="#9a3412">Des tiles de 8×8 ou 8×16 (`LCDC`)</text>
+    <text x="900" y="474" font-size="11" fill="#9a3412">qui peuvent se déplacer</text>
+    <text x="900" y="492" font-size="11" fill="#9a3412">indépendamment, listées dans l'OAM.</text>
+    <text x="900" y="516" font-size="11" fill="#9a3412">Le color index 0 est toujours</text>
+    <text x="900" y="534" font-size="11" fill="#9a3412">transparent : on y voit la couche</text>
+    <text x="900" y="552" font-size="11" fill="#9a3412">du dessous (window ou background).</text>
+  </g>
+
+  <!-- connecting leader lines from planes to panels -->
+  <line x1="630" y1="230" x2="880" y2="150" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="650" y1="320" x2="880" y2="310" stroke="#0284c7" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="700" y1="430" x2="880" y2="470" stroke="#ea580c" stroke-width="1" stroke-dasharray="3 3"/>
+
+  <!-- Legend / note -->
+  <text x="100" y="700" font-size="11.5" font-style="italic" fill="#64748b">Priorité de superposition (arrière → avant) : Background, puis Window par-dessus (si activée sur ce pixel), puis Objects par-dessus les deux (sauf priorité objet-derrière-background, voir OBJ-to-BG priority).</text>
+</svg>

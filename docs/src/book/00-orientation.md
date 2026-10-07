@@ -30,6 +30,14 @@ Tout ce livre consiste à construire, morceau par morceau, un modèle
 logiciel de chaque puce ci-dessus, et à les relier entre elles exactement
 comme le vrai circuit imprimé les relie.
 
+Voici un schéma d'ensemble du hardware réel que nous allons modéliser : le
+CPU et toutes les puces périphériques (PPU, APU, Timer, Joypad, port
+série) communiquent via un bus système partagé, la cartouche s'y connecte
+via son connecteur en bord de carte, et les registres I/O (`0xFF00`–
+`0xFF7F`) servent d'interface entre le CPU et chaque puce.
+
+![Architecture matérielle de la Game Boy (DMG)](./assets/architecture-overview.svg)
+
 ## Le CPU : un Sharp LR35902
 
 Le CPU de la Game Boy est une puce personnalisée, similaire à deux CPU
@@ -74,6 +82,8 @@ différentes :
 | `0xFF00`–`0xFF7F` | Registres d'E/S (I/O) — c'est ainsi que le CPU communique avec le PPU, l'APU, le timer, le joypad, etc. |
 | `0xFF80`–`0xFFFE` | RAM haute (High RAM) — une petite zone de travail supplémentaire |
 | `0xFFFF` | Un seul octet : le registre d'activation des interruptions |
+
+![Carte mémoire de la Game Boy (DMG)](./assets/memory-map.svg)
 
 Voilà beaucoup de noms que vous n'avez jamais entendus — ne vous inquiétez
 pas, chacun aura son propre chapitre. L'idée importante pour l'instant :

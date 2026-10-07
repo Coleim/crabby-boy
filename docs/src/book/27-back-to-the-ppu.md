@@ -1,10 +1,11 @@
 # 27. Là où nous avons laissé le PPU, et la suite
 
-Ce chapitre de clôture n'introduit pas de nouveau commit — c'est une
-pause délibérée pour faire le point, exactement là où le sous-titre de
-ce livre promettait de s'arrêter : au PPU, le seul sous-système encore
-au tout début de son parcours comparé à tout ce qui a été construit
-jusqu'ici.
+Ce chapitre ne introduit pas de nouveau commit — c'est une pause
+délibérée pour faire le point, exactement là où le sous-titre de ce
+livre promettait de s'arrêter : au PPU, le seul sous-système encore au
+tout début de son parcours comparé à tout ce qui a été construit
+jusqu'ici. Les chapitres suivants (28 et 29) reprennent directement là
+où celui-ci s'arrête.
 
 ## Un rapide récapitulatif de tout le parcours
 
@@ -83,5 +84,7 @@ bouton-touche explicitement non construite) et les interruptions basées
 sur STAT (le chapitre 14 a laissé le LCD STAT comme une adresse de
 vecteur sans déclencheur réel pour l'instant).
 
-C'est, authentiquement, là où en est le projet aujourd'hui. Le reste
+C'est, authentiquement, là où en est le projet aujourd'hui. Les
+chapitres 28 et 29 posent les bases conceptuelles (timing par scanline,
+puis les trois couches de rendu) qui préparent ce travail ; le reste
 s'écrira au fur et à mesure qu'il sera construit.
