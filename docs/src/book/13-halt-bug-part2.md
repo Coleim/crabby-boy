@@ -1,39 +1,45 @@
-# 13. The Halt Bug, Part 2
+# 13. Le bug HALT, partie 2
 
-Chapter 5 implemented a first attempt at the HALT bug, with its own
-dedicated test ROM, but flagged it as "not fully correct yet." This
-chapter (`9e46890`) is where `halt_bug.gb` actually gets added to the
-automated test suite and starts passing — and the real fix is a
-wonderfully humbling reminder of how deep tiny bugs can hide.
+Le Chapitre 5 a implémenté une première tentative pour le bug HALT, avec
+sa propre ROM de test dédiée, mais l'avait signalée comme "pas encore
+totalement correcte". Ce chapitre (`9e46890`) est celui où `halt_bug.gb`
+est réellement ajouté à la suite de tests automatisée et commence à
+passer — et la véritable correction est un rappel merveilleusement
+humiliant de la profondeur à laquelle de minuscules bugs peuvent se
+cacher.
 
-## The actual bug: a missing zero
+## Le véritable bug : un zéro manquant
 
 ```diff
 -            0xFF0F => self.interrupt_flag | 0b1110_000,
 +            0xFF0F => self.interrupt_flag | 0b1110_0000,
 ```
 
-That's it. `0b1110_000` is a **7-bit** literal (`0b1110000` = `0x70`);
-the intended value `0b1110_0000` is the correct **8-bit** one (`0xE0`).
-One missing digit. Chapter 12 explained that `IF`'s top 3 bits always
-read back as `1` on real hardware — this line is exactly that masking —
-and a single missing `0` meant bit 7 of `IF` was silently read as `0`
-instead of `1` whenever the actual flag bits underneath happened to leave
-it unset. `halt_bug.gb` precisely checks register values like this one,
-byte for byte, which is exactly why it caught something that running
-`cpu_instrs.gb` and `mem_timing.gb` never surfaced.
+C'est tout. `0b1110_000` est un littéral de **7 bits** (`0b1110000` =
+`0x70`) ; la valeur voulue `0b1110_0000` est la bonne valeur de **8
+bits** (`0xE0`). Un seul chiffre manquant. Le Chapitre 12 a expliqué que
+les 3 bits de poids fort d'`IF` se lisent toujours comme `1` sur le vrai
+hardware — cette ligne est exactement ce masquage — et un unique `0`
+manquant faisait que le bit 7 d'`IF` était silencieusement lu comme `0`
+au lieu de `1` chaque fois que les bits de flag réels en dessous se
+trouvaient être non définis. `halt_bug.gb` vérifie précisément des
+valeurs de registre comme celle-ci, octet par octet, ce qui explique
+exactement pourquoi elle a détecté quelque chose que l'exécution de
+`cpu_instrs.gb` et `mem_timing.gb` n'avait jamais révélé.
 
-This is a genuinely useful lesson, maybe the most useful one in this
-whole book: **the "halt bug" test failure wasn't actually about HALT
-logic being wrong at all** — the HALT bug *implementation* from Chapter 5
-was fine. The bug was one bit-width typo in a completely different
-register, several chapters earlier, that only a very specific, narrowly
-targeted test ROM happened to expose. This is exactly why dedicated,
-narrow test ROMs (as opposed to only big general ones) earn their keep —
-and exactly why, when a test fails, the bug is often not where the test's
-name suggests you should look first.
+C'est une leçon véritablement utile, peut-être la plus utile de tout ce
+livre : **l'échec du test du "bug HALT" ne concernait en réalité pas du
+tout une logique HALT erronée** — l'*implémentation* du bug HALT du
+Chapitre 5 était correcte. Le bug était une faute de frappe sur la
+largeur d'un bit dans un registre complètement différent, plusieurs
+chapitres plus tôt, que seule une ROM de test très spécifique et
+étroitement ciblée a fini par révéler. C'est exactement pour cela que des
+ROMs de test dédiées et ciblées (par opposition à seulement de grandes
+ROMs générales) méritent leur place — et exactement pourquoi, quand un
+test échoue, le bug ne se trouve souvent pas là où le nom du test
+suggère de regarder en premier.
 
-## Two smaller correctness fixes alongside it
+## Deux corrections de justesse plus mineures au passage
 
 ```rust
 0xFEA0..=0xFEFF => {
@@ -41,32 +47,34 @@ name suggests you should look first.
 }
 ```
 
-Writes to the `0xFEA0`–`0xFEFF` range (explicitly unusable memory, per
-the map from Chapter 0) were already handled on the *read* side but not
-the *write* side — now both log the same warning instead of falling
-through to a generic catch-all.
+Les écritures dans la plage `0xFEA0`–`0xFEFF` (mémoire explicitement
+inutilisable, selon la carte du Chapitre 0) étaient déjà gérées côté
+*lecture* mais pas côté *écriture* — désormais les deux affichent le
+même avertissement au lieu de tomber dans un cas générique fourre-tout.
 
 ```rust
 cpu_instr_test!(halt_bug, "./tests/halt_bug.gb");
 ```
 
-And `halt_bug.gb` finally joins the growing list of automated tests from
-Chapter 9/11, now that it actually passes.
+Et `halt_bug.gb` rejoint enfin la liste croissante des tests automatisés
+du Chapitre 9/11, maintenant qu'elle passe réellement.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A correct `IF` register read mask, and by extension, a `halt_bug.gb`
-  test that passes.
-- `halt_bug.gb` running as part of the automated CI suite from Chapter
-  11.
-- A completed write-side handler for the unusable OAM-adjacent memory
-  range.
+- Un masque de lecture correct du registre `IF`, et par extension, un
+  test `halt_bug.gb` qui passe.
+- `halt_bug.gb` fonctionnant dans le cadre de la suite CI automatisée du
+  Chapitre 11.
+- Un gestionnaire côté écriture complété pour la plage mémoire
+  inutilisable adjacente à l'OAM.
 
-## What's still missing
+## Ce qui manque encore
 
-- Nothing conceptually new about HALT itself remains — but this chapter
-  is a good moment to remember: passing test ROMs builds *confidence*,
-  not *proof*. Keep an eye out, in your own project, for "this test
-  failure's name doesn't match where the actual bug turned out to live."
-- Interrupt *dispatch* — actually jumping to an interrupt vector when one
-  fires — still isn't implemented. That's next, in Chapter 14.
+- Rien de conceptuellement nouveau ne reste à propos de HALT lui-même —
+  mais ce chapitre est un bon moment pour se rappeler : les ROMs de test
+  qui passent construisent la *confiance*, pas la *preuve*. Gardez un œil
+  dans votre propre projet sur "le nom de cet échec de test ne
+  correspond pas à l'endroit où le vrai bug s'est avéré se trouver".
+- Le *dispatch* des interruptions — sauter effectivement vers un vecteur
+  d'interruption quand une se déclenche — n'est toujours pas implémenté.
+  C'est le sujet suivant, au Chapitre 14.

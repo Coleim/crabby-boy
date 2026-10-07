@@ -1,24 +1,26 @@
-# Crabby Boy Developer Guides
+# Guides du développeur Crabby Boy
 
-This is a small collection of learning-oriented guides written while
-building [crabby-boy](https://github.com/), a Game Boy emulator, for
-learning purposes.
+Ceci est une petite collection de guides à visée pédagogique écrits en
+construisant [crabby-boy](https://github.com/), un émulateur Game Boy, dans
+un but d'apprentissage.
 
-Each guide is written tutorial-style: slow, explicit, with references to
-the authoritative [Pan Docs](https://gbdev.io/pandocs/) whenever a detail
-is simplified or skipped.
+Chaque guide est écrit façon tutoriel : lentement, explicitement, avec des
+références à la documentation de référence [Pan Docs](https://gbdev.io/pandocs/)
+chaque fois qu'un détail est simplifié ou omis.
 
-## Available guides
+## Guides disponibles
 
-- [PPU — Background Rendering Guide](./ppu-background.md): how the PPU
-  turns VRAM tile data into the background layer of a frame, built around
-  the real pixel-FIFO/fetcher mechanism.
+- [PPU — Guide du rendu de l'arrière-plan](./ppu-background.md) : comment
+  le PPU transforme les données de tuiles de la VRAM en la couche
+  d'arrière-plan d'une frame (image), construit autour du véritable
+  mécanisme de pixel-FIFO/fetcher.
 
-## The book: Building a Game Boy Emulator in Rust
+## Le livre : Construire un émulateur Game Boy en Rust
 
-A full "for dummies" style tutorial, following the project's real commit
-history from the very first `Cargo.toml` up to the current state: a
-working CPU, bus, timers, interrupts, APU, joypad, a terminal UI, and a
-first (minimal) PPU. It assumes general programming knowledge but zero
-prior Game Boy knowledge. Start at
-[Chapter 0](./book/00-orientation.md) and work through in order.
+Un tutoriel complet façon « pour les nuls », suivant le véritable
+historique des commits du projet depuis le tout premier `Cargo.toml`
+jusqu'à l'état actuel : un CPU fonctionnel, un bus, des timers, des
+interruptions, un APU, un joypad, une interface terminal, et un premier
+PPU (minimal). Il suppose une connaissance générale de la programmation
+mais aucune connaissance préalable de la Game Boy. Commencez au
+[Chapitre 0](./book/00-orientation.md) et progressez dans l'ordre.

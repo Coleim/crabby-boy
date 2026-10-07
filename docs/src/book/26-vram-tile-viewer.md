@@ -1,19 +1,20 @@
-# 26. Visualizing VRAM — Your First Look at Tile Data
+# 26. Visualiser la VRAM — votre premier regard sur les données de tuiles
 
-This chapter (`cc4a9d1`) is the natural bridge into the book's final
-part: it's the first time this project actually **decodes and displays
-real tile graphics data** — exactly the pixel-decoding math the companion
-[PPU Background Rendering Guide](../ppu-background.md) needs, built here
-first as a standalone debug view, with no PPU timing/scanline concerns
-attached yet.
+Ce chapitre (`cc4a9d1`) constitue le pont naturel vers la dernière partie
+du livre : c'est la première fois que ce projet **décode et affiche
+réellement des données graphiques de tuiles** — exactement les calculs de
+décodage de pixels dont le guide associé
+[PPU Background Rendering Guide](../ppu-background.md) a besoin, construit
+ici d'abord comme une vue de débogage autonome, sans encore aucune
+considération de timing/scanline du PPU.
 
-## The approach: decode every tile in VRAM into one big image
+## L'approche : décoder chaque tuile de la VRAM dans une seule grande image
 
 ```rust
 // src/display/vram_registers.rs
 pub fn render(frame: &mut Frame, area: Rect, vram: &[u8]) {
     let dyn_img = generate_buffer(vram);
-    // ... same ratatui-image rendering pattern as Chapters 22/25
+    // ... même motif de rendu ratatui-image que les chapitres 22/25
 }
 
 const COLORS: [Srgb; 4] = [
@@ -54,56 +55,64 @@ fn generate_buffer(vram: &[u8]) -> DynamicImage {
 }
 ```
 
-If this 2-bits-per-pixel decoding formula
-(`(((hi >> bit) & 1) << 1) | ((lo >> bit) & 1)`) looks familiar, it's
-because it's the exact same tile-data format explained conceptually back
-in Chapter 0's memory map and (indirectly) used since Chapter 2's byte
-interpretation discussion — this is simply the first chapter that
-actually *implements* reading it. Every 16-byte chunk of VRAM is treated
-as one 8×8 tile; `TILES_PER_ROW = 32` lays all of them out side by side,
-32 per row, into one big image — which is not itself a meaningful "image"
-a game ever displays as-is (it ignores tile maps, scrolling, and
-palettes entirely), but is an extremely useful *raw* view: it shows every
-distinct 8×8 graphic currently sitting in VRAM, regardless of whether or
-how the PPU would currently choose to arrange them on screen.
+Si cette formule de décodage à 2 bits par pixel
+(`(((hi >> bit) & 1) << 1) | ((lo >> bit) & 1)`) vous semble familière,
+c'est parce que c'est exactement le même format de données de tuile
+expliqué de manière conceptuelle dans la carte mémoire du chapitre 0 et
+(indirectement) utilisé depuis la discussion sur l'interprétation des
+octets du chapitre 2 — ceci est simplement le premier chapitre qui
+*implémente* réellement sa lecture. Chaque bloc de 16 octets de VRAM est
+traité comme une tuile 8×8 ; `TILES_PER_ROW = 32` les dispose toutes côte
+à côte, 32 par ligne, en une seule grande image — ce qui n'est pas en
+soi une "image" significative qu'un jeu afficherait telle quelle (elle
+ignore entièrement les tile maps, le défilement et les palettes), mais
+constitue une vue *brute* extrêmement utile : elle montre chaque graphique
+8×8 distinct actuellement présent en VRAM, indépendamment de la façon
+dont le PPU choisirait actuellement de les agencer à l'écran.
 
-## A fixed, hardcoded palette — and why that's fine, here
+## Une palette fixe, codée en dur — et pourquoi c'est très bien ici
 
 ```rust
 const COLORS: [Srgb; 4] = [
-    Srgb::new(1.0, 1.0, 1.0), // color index 0 → white
+    Srgb::new(1.0, 1.0, 1.0), // index de couleur 0 → blanc
     Srgb::new(0.83, 0.83, 0.83),
     Srgb::new(0.5, 0.5, 0.5),
-    Srgb::new(0.0, 0.0, 0.0), // color index 3 → black
+    Srgb::new(0.0, 0.0, 0.0), // index de couleur 3 → noir
 ];
 ```
 
-Chapter 0 mentioned that the actual on-screen shade for a given 2-bit
-color index depends on the `BGP` palette register (Chapter 7), not just
-the raw index. This debug viewer intentionally skips that step and maps
-index → shade directly, 1-to-1 — appropriate for a tool whose purpose is
-"show me the raw tile *shapes* regardless of any specific game's current
-palette," rather than "show me exactly what the screen would currently
-look like." Knowing when a simplification is appropriate for the tool
-you're building (a raw debug view) versus when it would be wrong (an
-accurate emulated display) is itself a useful skill.
+Le chapitre 0 mentionnait que la nuance réelle affichée à l'écran pour un
+index de couleur donné à 2 bits dépend du registre de palette `BGP`
+(chapitre 7), pas seulement de l'index brut. Ce visualiseur de débogage
+saute intentionnellement cette étape et associe l'index à une nuance
+directement, 1 pour 1 — approprié pour un outil dont le but est "montre-
+moi les *formes* brutes des tuiles indépendamment de la palette actuelle
+d'un jeu en particulier", plutôt que "montre-moi exactement à quoi
+ressemblerait l'écran en ce moment". Savoir quand une simplification est
+appropriée pour l'outil que vous construisez (une vue de débogage brute)
+par rapport à quand elle serait incorrecte (un affichage émulé fidèle)
+est en soi une compétence utile.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Accurate 2-bits-per-pixel tile decoding, reusable wherever real tile
-  graphics need to be turned into pixels.
-- A terminal-rendered view of every tile currently stored in VRAM, using
-  the same `ratatui-image` approach established in Chapters 22 and 25.
-- Every piece this project has built so far — CPU, bus, timer,
-  interrupts, APU, joypad stub, terminal UI, and now real tile decoding —
-  sitting alongside a PPU (Chapter 12) that still only tracks scanline
-  timing.
+- Un décodage fidèle des tuiles à 2 bits par pixel, réutilisable partout
+  où de vraies données graphiques de tuiles doivent être transformées en
+  pixels.
+- Une vue rendue dans le terminal de chaque tuile actuellement stockée en
+  VRAM, utilisant la même approche `ratatui-image` établie dans les
+  chapitres 22 et 25.
+- Chaque pièce que ce projet a construite jusqu'ici — CPU, bus, timer,
+  interruptions, APU, stub de joypad, interface terminal, et maintenant
+  un vrai décodage de tuiles — coexistant avec un PPU (chapitre 12) qui
+  ne suit encore que le timing des scanlines.
 
-## What's still missing
+## Ce qui manque encore
 
-- No tile *maps* are read (Chapter 0/the companion guide's "tile map"
-  concept) — this shows every tile that exists in VRAM, not which ones a
-  game has actually chosen to place where on its background.
-- No scrolling (`SCX`/`SCY`), no palette (`BGP`), no window, no sprites —
-  all explicitly out of scope for this raw debug tool, and all picked up
-  properly in the next, final chapter's forward-look.
+- Aucune *tile map* n'est lue (le concept de "tile map" du chapitre 0/du
+  guide associé) — ceci montre chaque tuile existant en VRAM, pas
+  lesquelles un jeu a effectivement choisi de placer où sur son
+  arrière-plan (background).
+- Pas de défilement (`SCX`/`SCY`), pas de palette (`BGP`), pas de fenêtre
+  (window), pas de sprites — tous explicitement hors du champ de cet
+  outil de débogage brut, et tous repris correctement dans le regard vers
+  l'avenir du dernier chapitre.

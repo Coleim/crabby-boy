@@ -1,9 +1,9 @@
-# 3. Registers, Flags, and Your First Opcode
+# 3. Registres, flags, et votre premier opcode
 
-Time to build the part everyone thinks of first when they hear
-"emulator": the CPU.
+Il est temps de construire la partie à laquelle tout le monde pense en
+premier en entendant « émulateur » : le CPU.
 
-## The register file
+## Le fichier de registres
 
 ```rust
 // src/cpu.rs
@@ -21,17 +21,19 @@ pub struct CPU {
 }
 ```
 
-Seven 8-bit general-purpose registers (`A B C D E H L`), one 8-bit flags
-register (`F`), and two 16-bit special registers: `PC` (program counter —
-always the address of the next instruction to fetch) and `SP` (stack
-pointer — address of the top of the call stack, used by `CALL`/`RET`/
-`PUSH`/`POP`, which we'll meet properly in Chapter 4).
+Sept registres 8 bits à usage général (`A B C D E H L`), un registre de
+flags 8 bits (`F`), et deux registres spéciaux 16 bits : `PC` (program
+counter — toujours l'adresse de la prochaine instruction à récupérer) et
+`SP` (stack pointer — adresse du sommet de la pile d'appels, utilisée par
+`CALL`/`RET`/`PUSH`/`POP`, que nous rencontrerons correctement au
+Chapitre 4).
 
-Many instructions treat two 8-bit registers as one 16-bit pair (`BC`, `DE`,
-`HL`, and `AF`) — we don't see that yet in this first commit, but it's
-coming almost immediately in Chapter 4.
+De nombreuses instructions traitent deux registres 8 bits comme une seule
+paire 16 bits (`BC`, `DE`, `HL`, et `AF`) — nous ne le voyons pas encore
+dans ce premier commit, mais cela arrive presque immédiatement au
+Chapitre 4.
 
-## Why these specific starting values?
+## Pourquoi ces valeurs de départ spécifiques ?
 
 ```rust
 pub fn new() -> Self {
@@ -50,34 +52,38 @@ pub fn new() -> Self {
 }
 ```
 
-These aren't arbitrary. On real hardware, a small internal **boot ROM**
-runs first (scrolling the Nintendo logo, playing the startup chime,
-validating the header), and by the time it hands control over to the
-cartridge at address `0x0100`, it has left the registers in this exact
-state. Since we're not emulating the boot ROM itself (yet — some
-emulators do, we don't here), we just start the CPU as if the boot ROM
-had already run: `PC = 0x0100` (the cartridge's actual entry point,
-matching the `entry_point` header field from Chapter 2) and these
-specific register values, which are documented, known constants.
+Ces valeurs ne sont pas arbitraires. Sur le hardware réel, une petite
+**ROM de démarrage (boot ROM)** interne s'exécute en premier (faisant
+défiler le logo Nintendo, jouant le son de démarrage, validant l'en-tête),
+et au moment où elle cède le contrôle à la cartouche à l'adresse
+`0x0100`, elle a laissé les registres exactement dans cet état. Comme
+nous n'émulons pas encore la boot ROM elle-même (pas pour l'instant —
+certains émulateurs le font, pas nous ici), nous démarrons simplement le
+CPU comme si la boot ROM avait déjà tourné : `PC = 0x0100` (le point
+d'entrée réel de la cartouche, correspondant au champ d'en-tête
+`entry_point` du Chapitre 2) et ces valeurs de registres spécifiques, qui
+sont des constantes documentées et connues.
 
-## The flags register: 4 bits that matter, packed into one byte
+## Le registre de flags : 4 bits qui comptent, compactés dans un octet
 
-`F` isn't a general-purpose register — each of its top 4 bits is an
-independent true/false flag, set or cleared as a *side effect* of running
-certain instructions, and later read back by conditional jumps
-("jump only if the last result was zero," etc.):
+`F` n'est pas un registre à usage général — chacun de ses 4 bits de poids
+fort est un flag booléen indépendant, positionné ou effacé en tant
+qu'*effet secondaire* de l'exécution de certaines instructions, puis
+relu par des sauts conditionnels (« sauter seulement si le dernier
+résultat était zéro », etc.) :
 
-| Bit | Name | Meaning |
+| Bit | Nom | Signification |
 |---|---|---|
-| 7 | Z | Zero — the last result was 0 |
-| 6 | N | Subtract — the last operation was a subtraction |
-| 5 | H | Half-carry — a carry occurred out of bit 3 |
-| 4 | C | Carry — a carry (or borrow) occurred out of bit 7 |
+| 7 | Z | Zéro — le dernier résultat était 0 |
+| 6 | N | Soustraction — la dernière opération était une soustraction |
+| 5 | H | Demi-retenue (half-carry) — une retenue est survenue hors du bit 3 |
+| 4 | C | Retenue (carry) — une retenue (ou un emprunt) est survenue hors du bit 7 |
 
-The bottom 4 bits of `F` are always 0 on real hardware. We'll see exactly
-this in the first real instruction below.
+Les 4 bits de poids faible de `F` sont toujours à 0 sur le hardware réel.
+Nous allons voir exactement cela dans la première vraie instruction
+ci-dessous.
 
-## The fetch-decode-execute loop, for real this time
+## La boucle fetch-decode-execute, pour de vrai cette fois
 
 ```rust
 fn read16bytes(&mut self, mem: &[u8], pc: u16) -> u16 {
@@ -105,25 +111,26 @@ pub fn execute(&mut self, mem: &mut [u8]) -> bool {
 }
 ```
 
-This is the shape every instruction handler will follow from now on:
+Voici la forme que suivra désormais chaque gestionnaire d'instruction :
 
-1. Read the byte at `PC` — that's the **opcode** (operation code), a
-   number that identifies which instruction to run.
-2. `match` on it to find the right handler.
-3. The handler reads however many extra bytes it needs (0, 1, or 2, right
-   after the opcode byte) and does its job.
-4. Advance `PC` past the opcode and its extra bytes (unless the
-   instruction itself changed `PC`, like a jump).
+1. Lire l'octet à `PC` — c'est l'**opcode** (operation code), un nombre
+   qui identifie quelle instruction exécuter.
+2. Faire un `match` dessus pour trouver le bon gestionnaire.
+3. Le gestionnaire lit autant d'octets supplémentaires que nécessaire (0,
+   1, ou 2, juste après l'octet d'opcode) et fait son travail.
+4. Avancer `PC` au-delà de l'opcode et de ses octets supplémentaires (à
+   moins que l'instruction elle-même n'ait changé `PC`, comme un saut).
 
-One Game Boy-specific detail worth calling out: `read16bytes` reads two
-bytes and combines them as `(high << 8) | low` — the *first* byte in
-memory is the **low** byte, the second is the **high** byte. This is
-called **little-endian** byte order, and the Game Boy uses it everywhere
-multi-byte values appear in memory. If you ever get a 16-bit value
-exactly backwards (e.g. reading `0x1234` as `0x3412`), this is almost
-always why.
+Un détail spécifique à la Game Boy mérite d'être souligné : `read16bytes`
+lit deux octets et les combine comme `(high << 8) | low` — le *premier*
+octet en mémoire est l'octet de **poids faible (low)**, le second est
+l'octet de **poids fort (high)**. On appelle cela l'ordre des octets
+**little-endian**, et la Game Boy l'utilise partout où des valeurs
+multi-octets apparaissent en mémoire. Si une valeur 16 bits vous paraît
+un jour exactement inversée (par exemple lire `0x1234` comme `0x3412`),
+c'est presque toujours la raison.
 
-## Your first few real instructions
+## Vos premières vraies instructions
 
 ```rust
 0xC3 => {
@@ -144,14 +151,15 @@ always why.
 }
 ```
 
-Every instruction's comment in the original source (e.g. `"LD SP, n16 3
-12"`) is shorthand straight from the opcode reference tables everyone in
-the Game Boy dev community uses, e.g.
-<https://gbdev.io/gb-opcodes/optables/>: instruction mnemonic, byte
-length, and cycle count. Get comfortable with that table — Chapter 4
-leans on it constantly.
+Le commentaire de chaque instruction dans le code source d'origine (par
+exemple `"LD SP, n16 3 12"`) est un raccourci issu directement des tables
+de référence d'opcodes que toute la communauté de développement Game Boy
+utilise, par exemple <https://gbdev.io/gb-opcodes/optables/> : le
+mnémonique de l'instruction, la longueur en octets, et le nombre de
+cycles. Familiarisez-vous avec cette table — le Chapitre 4 s'appuie
+dessus en permanence.
 
-## `SUB A, n8`: your first flags
+## `SUB A, n8` : vos premiers flags
 
 ```rust
 0xD6 => {
@@ -180,35 +188,39 @@ leans on it constantly.
 }
 ```
 
-Two Rust details worth a beginner's pause:
+Deux détails Rust méritent une pause pour un débutant :
 
-- `wrapping_sub`: plain `a - val` in Rust **panics** (in debug builds) if
-  the subtraction would go below 0 for a `u8`. But Game Boy arithmetic is
-  expected to wrap around (`0x00 - 0x01 = 0xFF`), exactly like the real
-  8-bit hardware would. `wrapping_sub`/`wrapping_add` are how you tell
-  Rust "yes, I know, wrap around instead of panicking." You'll use these
-  constantly.
-- `self.f |= 0x80` (OR-ing in a bit) and `self.a & 0xF` (ANDing to isolate
-  the low nibble) are the two bitwise operations you'll use the most in
-  this entire project. If bitwise AND/OR/shift are fuzzy for you, it's
-  worth a short detour before Chapter 4 — nearly every instruction uses
-  them.
+- `wrapping_sub` : un simple `a - val` en Rust **panique** (en mode debug)
+  si la soustraction donnerait un résultat inférieur à 0 pour un `u8`.
+  Mais l'arithmétique Game Boy est censée boucler (wrap around)
+  (`0x00 - 0x01 = 0xFF`), exactement comme le ferait le vrai hardware
+  8 bits. `wrapping_sub`/`wrapping_add` sont la façon de dire à Rust
+  « oui, je sais, boucle au lieu de paniquer ». Vous les utiliserez
+  constamment.
+- `self.f |= 0x80` (faire un OU bit à bit pour ajouter un bit) et
+  `self.a & 0xF` (faire un ET pour isoler le nibble de poids faible) sont
+  les deux opérations bit à bit que vous utiliserez le plus dans tout ce
+  projet. Si les opérations ET/OU/décalage bit à bit sont floues pour
+  vous, un petit détour avant le Chapitre 4 en vaut la peine — presque
+  chaque instruction les utilise.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A `CPU` struct with the real register layout and real boot-time values.
-- A working fetch-decode-execute loop.
-- A handful of instructions: `NOP`, `JP nn`, `LD SP,n16`, `LD [a16],A`,
-  `DI` (not yet implemented, just acknowledged), `LD A,n8`, `SUB A,n8`.
+- Une structure `CPU` avec la disposition réelle des registres et les
+  vraies valeurs au moment du démarrage.
+- Une boucle fetch-decode-execute fonctionnelle.
+- Une poignée d'instructions : `NOP`, `JP nn`, `LD SP,n16`, `LD [a16],A`,
+  `DI` (pas encore implémentée, juste reconnue), `LD A,n8`, `SUB A,n8`.
 
-## What's still missing
+## Ce qui manque encore
 
-- Only a handful of the 256 possible opcodes exist — everything else
-  falls into the `_ => { return false }` catch-all. Chapter 4 fills in
-  (almost) the rest.
-- No 16-bit register pairs (`BC`/`DE`/`HL`/`AF`) yet, even though many
-  instructions need them.
-- No connection to the cartridge header or memory bus yet — `execute`
-  takes a raw `&mut [u8]` slice directly.
-- No interrupts, no cycle-accurate timing return value yet (notice
-  `execute` returns a `bool`, not a cycle count — that comes later).
+- Seule une poignée des 256 opcodes possibles existe — tout le reste
+  tombe dans le cas générique `_ => { return false }`. Le Chapitre 4
+  remplit (presque) le reste.
+- Pas encore de paires de registres 16 bits (`BC`/`DE`/`HL`/`AF`), alors
+  que de nombreuses instructions en ont besoin.
+- Pas encore de connexion à l'en-tête de la cartouche ou au bus mémoire —
+  `execute` prend directement une tranche brute `&mut [u8]`.
+- Pas d'interruptions, pas encore de valeur de retour de synchronisation
+  précise au cycle près (remarquez que `execute` renvoie un `bool`, pas
+  un décompte de cycles — cela viendra plus tard).

@@ -1,33 +1,36 @@
-# 24. A High-Pass Filter for Cleaner Audio
+# 24. Un filtre passe-haut (high-pass filter) pour un son plus propre
 
-With all 4 channels passing Blargg's tests (Chapter 20), the raw mixed
-output can still have an unwanted side effect: a slowly drifting DC
-offset (the waveform's average value isn't centered on zero), which
-tends to sound like an audible hum or "thump" rather than clean audio.
-This small commit (`58e899f`) fixes that with a classic piece of signal
-processing: a **high-pass filter**.
+Avec les 4 canaux passant les tests de Blargg (chapitre 20), la sortie
+mixée brute peut encore présenter un effet secondaire indésirable : une
+composante continue (DC offset) qui dérive lentement (la valeur moyenne
+de la forme d'onde n'est pas centrée sur zéro), ce qui tend à produire un
+bourdonnement audible ou un "thump" plutôt qu'un son propre. Ce petit
+commit (`58e899f`) corrige cela avec un classique du traitement du
+signal : un **filtre passe-haut (high-pass filter)**.
 
-## What a high-pass filter does, conceptually
+## Ce que fait un filtre passe-haut, sur le plan conceptuel
 
-A high-pass filter lets fast-changing signal content through, while
-gradually "forgetting"/removing slow, near-constant drift. In audio
-terms: it keeps the actual sound you want, while removing a DC offset or
-very low-frequency rumble that shouldn't be there. This specific design
-is a simple one-pole filter — only needing to remember the *previous*
-input and output sample, not a whole history.
+Un filtre passe-haut laisse passer le contenu du signal qui change
+rapidement, tout en "oubliant"/supprimant progressivement une dérive
+lente, quasi constante. En termes audio : il conserve le son réel voulu,
+tout en supprimant une composante continue ou un grondement de très
+basse fréquence qui ne devrait pas être là. Cette conception précise est
+un simple filtre à un pôle — il n'a besoin de se souvenir que de
+l'échantillon d'entrée et de sortie *précédent*, pas de tout un
+historique.
 
-## The implementation
+## L'implémentation
 
 ```rust
 // src/audio/audio_output.rs
-let mut hp_x1 = 0.0; // previous input sample
-let mut hp_y1 = 0.0; // previous output sample
+let mut hp_x1 = 0.0; // échantillon d'entrée précédent
+let mut hp_y1 = 0.0; // échantillon de sortie précédent
 let hp_cutoff_hz = 20.0;
 let dt = 1.0 / selected_sample_rate as f32;
 let rc = 1.0 / (2.0 * std::f32::consts::PI * hp_cutoff_hz);
 let hp_alpha = rc / (rc + dt);
 
-// ... inside the audio callback, once per sample:
+// ... à l'intérieur du callback audio, une fois par échantillon :
 hp_y1 = hp_alpha * (hp_y1 + last_sample - hp_x1);
 hp_x1 = last_sample;
 for out in frame.iter_mut() {
@@ -35,38 +38,42 @@ for out in frame.iter_mut() {
 }
 ```
 
-`hp_cutoff_hz = 20.0` sets the filter's "cutoff frequency" — roughly, the
-threshold below which content gets attenuated. 20 Hz is right at the
-bottom edge of human hearing, chosen specifically to remove DC drift and
-sub-audible rumble while leaving every actually audible frequency
-untouched. `rc` and `hp_alpha` come from the standard formula for this
-kind of filter (a "first-order RC high-pass filter," if you want to look
-up the general electronics theory) — the important takeaway for this
-project isn't deriving the formula yourself, but recognizing *when* you
-need one: whenever mixed audio output has an audible hum/thump that
-test-ROM-style correctness checks (Chapter 20) wouldn't catch, since
-those check logical register behavior, not the final analog-ish waveform
-quality.
+`hp_cutoff_hz = 20.0` définit la "fréquence de coupure" du filtre —
+grosso modo, le seuil en dessous duquel le contenu est atténué. 20 Hz se
+situe tout au bord inférieur de l'audition humaine, choisi
+spécifiquement pour supprimer la dérive DC et le grondement sub-audible
+tout en laissant intacte chaque fréquence réellement audible. `rc` et
+`hp_alpha` proviennent de la formule standard pour ce type de filtre (un
+"filtre passe-haut RC du premier ordre", si vous voulez approfondir la
+théorie électronique générale) — ce qui compte vraiment à retenir pour
+ce projet n'est pas de redériver la formule soi-même, mais de reconnaître
+*quand* on en a besoin : chaque fois que la sortie audio mixée a un
+bourdonnement/thump audible que les vérifications de correction de type
+ROM de test (chapitre 20) ne détecteraient pas, puisqu'elles vérifient le
+comportement logique des registres, pas la qualité finale de la forme
+d'onde de type analogique.
 
-## Where this filter sits
+## Où se situe ce filtre
 
-Notice this lives in `audio_output.rs` — the layer that talks to `cpal`
-and the real sound card (Chapter 15) — not inside the APU itself. The APU
-stays focused on accurately emulating what real Game Boy hardware
-computes; final-stage signal cleanup for *this particular emulator's*
-output path is a separate, presentation-level concern, kept in its own
-place.
+Remarquez que ceci se trouve dans `audio_output.rs` — la couche qui
+communique avec `cpal` et la véritable carte son (chapitre 15) — et non
+à l'intérieur de l'APU elle-même. L'APU reste concentrée sur l'émulation
+fidèle de ce que calcule le vrai matériel (hardware) de la Game Boy ; le
+nettoyage final du signal pour le chemin de sortie propre *à cet
+émulateur en particulier* est une préoccupation séparée, de niveau
+présentation, conservée à sa propre place.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Cleaner audio output, with DC offset and sub-audible rumble filtered
-  out before reaching real speakers.
-- A clear separation between "accurate hardware emulation" (APU) and
-  "output quality polish" (`audio_output.rs`) — worth keeping in mind as
-  a general design principle.
+- Une sortie audio plus propre, avec la composante continue et le
+  grondement sub-audible filtrés avant d'atteindre de vrais haut-parleurs.
+- Une séparation claire entre "émulation matérielle fidèle" (APU) et
+  "amélioration de la qualité de sortie" (`audio_output.rs`) — un
+  principe de conception général à garder à l'esprit.
 
-## What's still missing
+## Ce qui manque encore
 
-- This is a presentation-layer fix, not a hardware-accuracy one — it has
-  no bearing on any of the `dmg_sound` test ROMs from Chapter 20, which
-  continue to pass or fail independently of it.
+- Il s'agit d'une correction de couche présentation, pas d'une correction
+  de fidélité matérielle — elle n'a aucune incidence sur les ROM de test
+  `dmg_sound` du chapitre 20, qui continuent de réussir ou d'échouer
+  indépendamment d'elle.

@@ -1,12 +1,12 @@
-# 7. Filling In Missing Registers
+# 7. Compléter les registres manquants
 
-With `IOBridge` in place (Chapter 6), it's now easy to add real storage
-behind registers that were previously hardcoded constants or outright
-missing. This chapter's commit (`5379233`) does exactly that for the
-joypad and — notably — plants the very first `PPU` struct, even though
-real graphics are still a long way off.
+Avec `IOBridge` en place (Chapitre 6), il est désormais facile d'ajouter un
+vrai stockage derrière des registres qui étaient auparavant des constantes
+codées en dur ou carrément absents. Le commit de ce chapitre (`5379233`)
+fait exactement cela pour le joypad et — fait notable — plante la toute
+première structure `PPU`, même si les vrais graphismes sont encore loin.
 
-## `Joypad`: storage first, real buttons later
+## `Joypad` : le stockage d'abord, les vrais boutons plus tard
 
 ```rust
 // src/hardware/joypad.rs
@@ -27,15 +27,15 @@ impl Joypad {
 }
 ```
 
-`P1` (register `0xFF00`) is the real name for the joypad register in Game
-Boy documentation. At this point it's just a plain byte with no actual
-button logic attached — games can write to it and read back whatever they
-wrote, which is enough to stop them from getting stuck, without yet
-reporting any button presses. Real button handling, including the
-slightly unusual "select which group of 4 buttons you're asking about"
-protocol, is Chapter 21.
+`P1` (registre `0xFF00`) est le vrai nom du registre du joypad dans la
+documentation Game Boy. À ce stade, c'est juste un simple octet sans
+logique de bouton réelle attachée — les jeux peuvent y écrire et relire ce
+qu'ils y ont écrit, ce qui suffit à les empêcher de rester bloqués, sans
+pour autant signaler la moindre pression de bouton. La gestion réelle des
+boutons, y compris le protocole un peu particulier de « sélectionner quel
+groupe de 4 boutons on interroge », c'est le Chapitre 21.
 
-## `PPU`: a struct that exists, but only stores numbers
+## `PPU` : une structure qui existe, mais ne fait que stocker des nombres
 
 ```rust
 // src/hardware/ppu.rs
@@ -71,17 +71,19 @@ impl PPU {
 }
 ```
 
-This is a deliberately small, honest step: five PPU registers you already
-met conceptually in Chapter 0 (`LCDC` — the master "what to draw and how"
-control register; `SCY`/`SCX` — background scroll position; `LY` — the
-PPU's "current scanline" counter; `BGP` — the background palette), each
-just a byte that remembers what was last written to it. Nothing *uses*
-these values to draw anything yet — there's no timing, no VRAM access, no
-scanline counting. But a real struct now exists to build on top of, which
-matters more than it sounds: Chapter 12 (the actual minimal PPU) extends
-*this exact struct* rather than starting from scratch.
+C'est une étape délibérément petite et honnête : cinq registres du PPU que
+vous avez déjà rencontrés conceptuellement au Chapitre 0 (`LCDC` — le
+registre de contrôle maître « quoi dessiner et comment » ; `SCY`/`SCX` —
+position de défilement de l'arrière-plan ; `LY` — le compteur de « ligne
+de balayage actuelle » du PPU ; `BGP` — la palette de l'arrière-plan),
+chacun n'étant qu'un octet qui se souvient de la dernière valeur écrite.
+Rien n'*utilise* encore ces valeurs pour dessiner quoi que ce soit — il n'y
+a ni timing, ni accès à la VRAM, ni comptage de lignes de balayage. Mais
+une vraie structure existe maintenant pour construire dessus, ce qui
+compte plus qu'il n'y paraît : le Chapitre 12 (le vrai PPU minimal) étend
+*cette structure exacte* plutôt que de repartir de zéro.
 
-## Wiring both into `IOBridge`
+## Connecter les deux à `IOBridge`
 
 ```rust
 pub struct IOBridge {
@@ -110,29 +112,33 @@ pub fn read(&self, addr: u16) -> u8 {
 }
 ```
 
-Compare this to Chapter 6's version: the hardcoded `0xFF40 => 0x91`
-constant is gone, replaced by `self.ppu.read(addr)` — a real delegation to
-a real (if still mostly empty) component. Also notice the fallback for
-unmapped addresses changed from `panic!` (Chapter 6) to printing a
-warning and returning `0x00` — a small but meaningful robustness
-improvement: a game hitting an address we haven't implemented yet no
-longer crashes the whole emulator, it just gets a (possibly wrong) zero
-and a log line to investigate later.
+Comparez ceci à la version du Chapitre 6 : la constante codée en dur
+`0xFF40 => 0x91` a disparu, remplacée par `self.ppu.read(addr)` — une
+vraie délégation vers un composant réel (même s'il reste encore
+essentiellement vide). Remarquez également que le comportement de repli
+pour les adresses non mappées est passé d'un `panic!` (Chapitre 6) à
+l'affichage d'un avertissement avec retour de `0x00` — une petite
+amélioration de robustesse mais significative : un jeu accédant à une
+adresse que nous n'avons pas encore implémentée ne fait plus planter tout
+l'émulateur, il reçoit simplement un zéro (peut-être erroné) et une ligne
+de journal (log) à examiner plus tard.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A real (if minimal) `PPU` struct and `Joypad` struct, both wired through
-  `IOBridge`.
-- Five named PPU registers with real backing storage.
-- A more forgiving fallback for addresses not yet implemented.
+- Une structure `PPU` et une structure `Joypad` réelles (quoique
+  minimales), toutes deux connectées via `IOBridge`.
+- Cinq registres PPU nommés avec un vrai stockage derrière.
+- Un comportement de repli plus tolérant pour les adresses non encore
+  implémentées.
 
-## What's still missing
+## Ce qui manque encore
 
-- `PPU` has no behavior yet — no timing, no scanline progression, no
-  interrupt firing, no pixels. Chapter 12 is where it starts actually
-  doing something.
-- `Joypad` has no concept of actual button state yet — only an
-  "echo back whatever was written" byte.
-- `STAT` (`0xFF41`, LCD status) isn't listed in the PPU's own read/write
-  match yet — it falls through to `IOBridge`'s generic warning path for
-  now.
+- Le `PPU` n'a encore aucun comportement — pas de timing, pas de
+  progression des lignes de balayage, pas de déclenchement d'interruption
+  (interrupt), pas de pixels. Le Chapitre 12 est l'endroit où il commence
+  à réellement faire quelque chose.
+- Le `Joypad` n'a encore aucune notion d'état réel des boutons — juste un
+  octet « renvoyer ce qui a été écrit ».
+- `STAT` (`0xFF41`, statut du LCD) n'est pas encore listé dans le
+  match read/write propre au PPU — il tombe pour l'instant dans le chemin
+  d'avertissement générique de `IOBridge`.

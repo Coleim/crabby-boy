@@ -1,11 +1,12 @@
-# 23. Decoupling Emulation Speed from Display Refresh
+# 23. Découpler la vitesse d'émulation du rafraîchissement de l'affichage
 
-This commit (`a3ec152`, "refactor emulator to be able to be ticked from
+Ce commit (`a3ec152`, "refactor emulator to be able to be ticked from
 external process... useful for having a UI that framerate differs from
-CPU") is the direct fix for the coupling problem identified at the end of
-Chapter 22. It introduces the architecture the project still uses today.
+CPU") est la correction directe du problème de couplage identifié à la
+fin du chapitre 22. Il introduit l'architecture que le projet utilise
+encore aujourd'hui.
 
-## A `Display` trait: the UI is now a pluggable interface
+## Un trait `Display` : l'interface utilisateur devient une interface enfichable
 
 ```rust
 // src/display/display.rs
@@ -16,14 +17,15 @@ pub trait Display {
 }
 ```
 
-Instead of one concrete struct owning both "run the emulator" and "draw
-to the terminal" (Chapter 22's `DisplayInterface`), there's now a small
-trait any display implementation can satisfy. `CrabbyBoy` (the emulator
-itself) and whatever implements `Display` become two independent things,
-only connected by `draw` being handed a read-only reference to the
-emulator's current state.
+Au lieu d'une seule structure concrète possédant à la fois "faire tourner
+l'émulateur" et "dessiner dans le terminal" (le `DisplayInterface` du
+chapitre 22), il existe désormais un petit trait que n'importe quelle
+implémentation d'affichage peut satisfaire. `CrabbyBoy` (l'émulateur
+lui-même) et ce qui implémente `Display` deviennent deux éléments
+indépendants, reliés uniquement par le fait que `draw` reçoit une
+référence en lecture seule à l'état actuel de l'émulateur.
 
-## `CrabbyBoy::tick_for_duration`: run "about this many cycles," not "one step"
+## `CrabbyBoy::tick_for_duration` : exécuter "environ ce nombre de cycles", pas "une seule étape"
 
 ```rust
 // src/crabby_boy.rs
@@ -38,15 +40,16 @@ pub fn tick_for_duration(&mut self, frame_delta: Duration) {
 }
 ```
 
-This is the key new idea. Instead of the main loop stepping the CPU
-exactly once per iteration (as it has since Chapter 9), the caller now
-says "however much real time just passed (`frame_delta`), run
-*approximately* that much emulated time's worth of steps." The display
-loop can redraw at whatever rate makes sense for a terminal (a handful of
-times per second) while the emulator inside still advances at the right
-overall speed, in a burst, between redraws.
+C'est la nouvelle idée clé. Au lieu que la boucle principale fasse
+avancer le CPU exactement une fois par itération (comme c'est le cas
+depuis le chapitre 9), l'appelant dit maintenant "quel que soit le temps
+réel qui vient de s'écouler (`frame_delta`), exécute *approximativement*
+l'équivalent de ce temps émulé en étapes". La boucle d'affichage peut se
+redessiner au rythme qui convient pour un terminal (quelques fois par
+seconde) pendant que l'émulateur, à l'intérieur, avance toujours à la
+bonne vitesse globale, par rafale, entre deux rafraîchissements.
 
-## The main loop, now driven from `main.rs`, not `emulator.rs`
+## La boucle principale, désormais pilotée depuis `main.rs`, et non `emulator.rs`
 
 ```rust
 // src/main.rs
@@ -71,19 +74,20 @@ while display.is_running() {
 }
 ```
 
-Compare this to Chapter 9's original loop, which lived entirely inside
-`CrabbyBoy::run` and never returned until the whole ROM finished (or a
-test condition was met). Now, `main.rs` owns the outer loop, measures
-real elapsed wall-clock time (`dt`) each iteration, and explicitly
-paces itself to roughly 60 frames per second — sleeping out any leftover
-time if an iteration finished early. This is the standard shape of a
-real-time simulation loop: measure elapsed time, advance the simulation
-by that much, render, repeat.
+Comparez cela à la boucle d'origine du chapitre 9, qui vivait entièrement
+à l'intérieur de `CrabbyBoy::run` et ne retournait jamais avant que toute
+la ROM ne soit terminée (ou qu'une condition de test ne soit remplie).
+Désormais, `main.rs` possède la boucle externe, mesure le temps réel
+écoulé en horloge murale (`dt`) à chaque itération, et se cale
+explicitement sur environ 60 images (frame) par seconde — en mettant en
+veille le temps restant si une itération se termine en avance. C'est la
+forme standard d'une boucle de simulation en temps réel : mesurer le
+temps écoulé, faire avancer la simulation d'autant, afficher, recommencer.
 
-## `RatatuiDisplay`: the first concrete `Display` implementor
+## `RatatuiDisplay` : la première implémentation concrète de `Display`
 
 ```rust
-// src/display/ratatui_display.rs (sketch)
+// src/display/ratatui_display.rs (ébauche)
 pub struct RatatuiDisplay {
     terminal: DefaultTerminal,
     running: bool,
@@ -91,32 +95,36 @@ pub struct RatatuiDisplay {
 }
 ```
 
-A new `FpsCounter` (`src/display/fps_counter.rs`) tracks real measured
-frame rate for on-screen debugging — handy once you're deliberately
-pacing a loop like this, since it's easy to introduce subtle bugs that
-make it run faster or slower than intended.
+Un nouveau `FpsCounter` (`src/display/fps_counter.rs`) suit le taux de
+rafraîchissement (refresh rate) réel mesuré pour le débogage à l'écran —
+pratique dès lors qu'on cale délibérément une boucle de cette manière,
+car il est facile d'introduire des bugs subtils qui la font tourner plus
+vite ou plus lentement que prévu.
 
-## A quick, honest follow-up fix
+## Une correction de suivi rapide et honnête
 
-The very next commit, `8b32399` ("Fixing test after refactor. It's
-cleaner now... Love it!"), exists because this refactor — like most
-refactors touching a central loop — broke the existing automated test
-suite (Chapter 9/11's `cpu_instr_test!` macro), which had been calling
-the old `CrabbyBoy::run`/single-`tick` shape directly. Updating tests to
-match a new architecture, right after introducing it, is completely
-normal and worth normalizing rather than hiding.
+Le commit suivant immédiat, `8b32399` ("Fixing test after refactor. It's
+cleaner now... Love it!"), existe parce que ce refactoring — comme la
+plupart des refactorings touchant une boucle centrale — a cassé la suite
+de tests automatisés existante (la macro `cpu_instr_test!` des
+chapitres 9/11), qui appelait directement l'ancienne forme
+`CrabbyBoy::run`/`tick` unique. Mettre à jour les tests pour
+correspondre à une nouvelle architecture, juste après l'avoir introduite,
+est tout à fait normal et mérite d'être assumé plutôt que caché.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A clean `Display` trait, decoupling "how the emulator runs" from "how
-  it's shown."
-- Real-time-paced ticking (`tick_for_duration`), letting emulation speed
-  and display refresh rate differ.
-- The first working `RatatuiDisplay`, and an `FpsCounter` to keep it
-  honest.
+- Un trait `Display` propre, découplant "comment l'émulateur tourne" de
+  "comment il est affiché".
+- Un avancement (tick) cadencé en temps réel (`tick_for_duration`),
+  permettant à la vitesse d'émulation et au taux de rafraîchissement de
+  l'affichage de différer.
+- Le premier `RatatuiDisplay` fonctionnel, et un `FpsCounter` pour
+  vérifier qu'il reste honnête.
 
-## What's still missing
+## Ce qui manque encore
 
-- `RatatuiDisplay` at this point still draws almost nothing meaningful —
-  the actual CPU register/header views (Chapter 25) and VRAM tile viewer
-  (Chapter 26) are built on top of this foundation in the chapters ahead.
+- À ce stade, `RatatuiDisplay` n'affiche encore presque rien de
+  significatif — les véritables vues de registres CPU/en-tête
+  (chapitre 25) et le visualiseur de tuiles VRAM (chapitre 26) sont
+  construits sur cette base dans les chapitres suivants.

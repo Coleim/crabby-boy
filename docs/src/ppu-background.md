@@ -1,51 +1,59 @@
-# PPU — Background Rendering Guide
+# PPU — Guide du rendu du fond (background)
 
-This guide explains, step by step, how to make your PPU draw the
-background layer onto a 160x144 pixel screen. We go slowly. Nothing is
-assumed. By the end you'll understand exactly what data lives where, and
-how it turns into pixels.
+Ce guide explique, étape par étape, comment faire en sorte que votre PPU
+dessine la couche de fond (background) sur un écran de 160x144 pixels.
+On avance lentement. Rien n'est présupposé. À la fin, vous comprendrez
+exactement quelles données se trouvent où, et comment elles se
+transforment en pixels.
 
-> **Scope of this guide: background only.** No window, no sprites. Those
-> come later, on top of what you build here.
+> **Portée de ce guide : uniquement le fond (background).** Pas de
+> window, pas de sprites. Ces éléments viendront plus tard, par-dessus
+> ce que vous construisez ici.
 
-Official reference docs (Pan Docs) are linked throughout. When in doubt,
-go read the linked page — this guide simplifies things to make them easier
-to learn, the official docs are the ground truth.
+Les documents de référence officiels (Pan Docs) sont liés tout au long
+du texte. En cas de doute, allez lire la page liée — ce guide simplifie
+les choses pour les rendre plus faciles à apprendre, les docs officielles
+restent la vérité de référence.
 
-## 1. The big picture
+## 1. La vue d'ensemble
 
-Every 1/60th of a second, the Game Boy draws one full image (a "frame") to
-the screen. The screen is 160 pixels wide and 144 pixels tall.
+Chaque 1/60e de seconde, la Game Boy dessine une image complète (une
+« frame ») à l'écran. L'écran fait 160 pixels de large et 144 pixels de
+haut.
 
-The image is NOT drawn all at once. It's drawn **one horizontal line at a
-time**, from the top (line 0) to the bottom (line 143), left to right on
-each line. This matches how old CRT screens physically worked: a beam
-scans across, then down, repeatedly.
+L'image n'est PAS dessinée d'un seul coup. Elle est dessinée **une ligne
+horizontale à la fois**, du haut (ligne 0) vers le bas (ligne 143), de
+gauche à droite sur chaque ligne. Cela correspond à la façon dont
+fonctionnaient physiquement les anciens écrans à tube cathodique (CRT) :
+un faisceau balaie horizontalement, puis descend, et recommence.
 
-A chip called the **PPU** (Pixel Processing Unit) is responsible for this.
-It runs continuously, in lockstep with the CPU, counting time in units
-called **dots**. A full line takes exactly **456 dots**. There are **154
-lines** total per frame (not 144 — more on this in a moment).
+Une puce appelée le **PPU** (Pixel Processing Unit) est responsable de
+cela. Elle fonctionne en continu, en parfaite synchronisation avec le
+CPU, en comptant le temps en unités appelées **dots**. Une ligne complète
+prend exactement **456 dots**. Il y a **154 lignes** au total par frame
+(pas 144 — on y revient dans un instant).
 
-Reference: <https://gbdev.io/pandocs/Rendering.html>
+Référence : <https://gbdev.io/pandocs/Rendering.html>
 
-### Why 154 lines, not 144?
+### Pourquoi 154 lignes, et pas 144 ?
 
-The screen only has 144 visible rows. But the PPU still spends time
-pretending to draw 10 more invisible rows (lines 144 to 153) after the
-real image is done. This extra time is called **VBlank** ("vertical
-blank"), and it exists so the game has a safe window to update things
-before the next frame starts drawing. Nothing is drawn to the screen
-during these 10 lines — think of it as a pause.
+L'écran n'a que 144 lignes visibles. Mais le PPU continue de passer du
+temps à « faire semblant » de dessiner 10 lignes invisibles
+supplémentaires (lignes 144 à 153) une fois l'image réelle terminée. Ce
+temps supplémentaire s'appelle **VBlank** (« vertical blank »), et il
+existe pour que le jeu dispose d'une fenêtre sûre pour mettre à jour des
+choses avant que la frame suivante ne commence à se dessiner. Rien n'est
+dessiné à l'écran pendant ces 10 lignes — pensez-y comme une pause.
 
-So: 144 real lines + 10 "pause" lines = 154 lines per frame.
+Donc : 144 lignes réelles + 10 lignes de « pause » = 154 lignes par
+frame.
 
-## 2. The 4 modes, and what happens during each line
+## 2. Les 4 modes, et ce qui se passe pendant chaque ligne
 
-For each of the first 144 lines, the PPU goes through 3 phases, always in
-the same order. Then, once per frame, after line 143, it spends 10 whole
-lines in a 4th phase (VBlank). Here's the timeline for ONE visible line
-(say, line 0):
+Pour chacune des 144 premières lignes, le PPU traverse 3 phases, toujours
+dans le même ordre. Puis, une fois par frame, après la ligne 143, il
+passe 10 lignes entières dans une 4e phase (VBlank). Voici la timeline
+pour UNE ligne visible (disons, la ligne 0) :
 
 ```text
 dot:     0 ────────────── 80 ────────────── 252 ──────────────── 456
@@ -54,89 +62,101 @@ mode:    |   Mode 2        |     Mode 3       |      Mode 0        |
          |   (80 dots)     |   (172 dots)     |   (204 dots)       |
 ```
 
-- **Mode 2 — OAM Scan** (first 80 dots of the line): the PPU would
-  normally check which sprites appear on this line. **We are not doing
-  sprites in this guide**, so for us this phase currently does nothing —
-  it's just a placeholder. Just know it exists and takes 80 dots.
+- **Mode 2 — OAM Scan** (les 80 premiers dots de la ligne) : le PPU
+  vérifierait normalement quels sprites apparaissent sur cette ligne.
+  **Nous ne traitons pas les sprites dans ce guide**, donc pour nous
+  cette phase ne fait actuellement rien — c'est juste un espace réservé.
+  Sachez simplement qu'elle existe et qu'elle prend 80 dots.
 
-- **Mode 3 — Drawing** (next 172 dots, in our simplified version): this is
-  the important phase. This is where the PPU actually figures out the
-  color of each of the 160 pixels on this line and writes them to the
-  screen. **This is the core of what this guide teaches you to build.**
+- **Mode 3 — Drawing** (les 172 dots suivants, dans notre version
+  simplifiée) : c'est la phase importante. C'est là que le PPU détermine
+  réellement la couleur de chacun des 160 pixels de cette ligne et les
+  écrit à l'écran. **C'est le cœur de ce que ce guide vous apprend à
+  construire.**
 
-  > Note: on real hardware, Mode 3's length varies (172 to 289 dots)
-  > depending on sprites, the window layer, and scroll position. We are
-  > deliberately using a **fixed 172 dots** to keep things simple. This is
-  > a known simplification — see [section 7](#7-what-this-guide-deliberately-does-not-cover)
-  > for what real hardware does differently.
+  > Remarque : sur le hardware réel, la durée du Mode 3 varie (172 à 289
+  > dots) selon les sprites, la couche window et la position de scroll.
+  > Nous utilisons délibérément une durée **fixe de 172 dots** pour
+  > simplifier. C'est une simplification connue — voir la
+  > [section 7](#7-ce-que-ce-guide-ne-couvre-délibérément-pas) pour ce
+  > que le hardware réel fait différemment.
 
-- **Mode 0 — HBlank** (remaining dots until 456): nothing happens, this is
-  just dead time so the whole line adds up to exactly 456 dots.
+- **Mode 0 — HBlank** (les dots restants jusqu'à 456) : rien ne se passe,
+  c'est juste du temps mort pour que la ligne entière totalise exactement
+  456 dots.
 
-After all 144 visible lines, we get:
+Après les 144 lignes visibles, on obtient :
 
-- **Mode 1 — VBlank** (10 lines x 456 dots = 4560 dots): the PPU is idle,
-  the frame is considered finished and ready to show. An interrupt fires
-  here so the game code knows a new frame just completed.
+- **Mode 1 — VBlank** (10 lignes x 456 dots = 4560 dots) : le PPU est
+  inactif, la frame est considérée comme terminée et prête à être
+  affichée. Une interruption se déclenche ici pour que le code du jeu
+  sache qu'une nouvelle frame vient de se terminer.
 
-Reference (mode durations table):
+Référence (tableau des durées de modes) :
 <https://gbdev.io/pandocs/Rendering.html#ppu-modes>
 
-## 3. Where does the picture data actually come from?
+## 3. D'où viennent réellement les données de l'image ?
 
-This is the part that trips people up: **VRAM does not contain pixels.**
-It contains two different kinds of things, and you need both to produce a
-pixel:
+C'est la partie qui déroute souvent les gens : **la VRAM ne contient pas
+de pixels.** Elle contient deux types de choses différents, et vous avez
+besoin des deux pour produire un pixel :
 
-1. **Tile data**: the actual shapes (8x8 pixel images), stored in a
-   compressed 2-bits-per-pixel format.
-2. **Tile map**: a 32x32 grid of numbers, where each number says "put tile
-   #N here." It's like a mosaic instruction sheet: "tile 5 goes top-left,
-   tile 12 goes next to it," etc.
+1. **Les données de tuile (tile data)** : les formes réelles (images de
+   8x8 pixels), stockées dans un format compressé de 2 bits par pixel.
+2. **La tilemap (tile map)** : une grille de 32x32 nombres, où chaque
+   nombre dit « placer la tuile (tile) n°N ici ». C'est comme une
+   feuille d'instructions de mosaïque : « la tuile 5 va en haut à
+   gauche, la tuile 12 va juste à côté », etc.
 
-So to find the color of one pixel, you must:
+Donc, pour trouver la couleur d'un pixel, vous devez :
 
-1. Figure out which tile (from the tile MAP) covers that pixel.
-2. Look up that tile's actual image data (from the tile DATA area).
-3. Extract the one pixel you need from that 8x8 tile image.
+1. Déterminer quelle tuile (depuis la TILEMAP) couvre ce pixel.
+2. Rechercher les données d'image réelles de cette tuile (depuis la zone
+   de données de tuile).
+3. Extraire le seul pixel dont vous avez besoin de cette image de tuile
+   8x8.
 
-Let's go through each piece in detail.
+Passons en revue chaque élément en détail.
 
-### 3.1 The tile map
+### 3.1 La tilemap
 
-VRAM contains **two** possible tile maps, at fixed addresses:
+La VRAM contient **deux** tilemaps possibles, à des adresses fixes :
 
 - `$9800`–`$9BFF`
 - `$9C00`–`$9FFF`
 
-Each is 32x32 = 1024 bytes. Each byte is a **tile index** (0–255), telling
-you which tile from the tile data area to draw at that grid position.
+Chacune fait 32x32 = 1024 octets. Chaque octet est un **index de tuile**
+(0–255), indiquant quelle tuile de la zone de données de tuile dessiner à
+cette position de la grille.
 
-Since each tile is 8x8 pixels, a full 32x32 tile map represents a picture
-that is 256x256 pixels — much bigger than the 160x144 screen. Only a
-160x144 window into this larger picture is shown at any time (more on this
-in [section 3.4](#34-scrolling-scx--scy), scrolling).
+Puisque chaque tuile fait 8x8 pixels, une tilemap complète de 32x32
+représente une image de 256x256 pixels — bien plus grande que l'écran de
+160x144. Seule une fenêtre de 160x144 dans cette image plus grande est
+affichée à un instant donné (plus de détails dans la
+[section 3.4](#34-le-scroll-scx--scy), le scroll).
 
-Which of the two maps is used for the background is controlled by **bit 3**
-of the LCDC register (`$FF40`):
+Quelle tilemap des deux est utilisée pour le fond est contrôlé par le
+**bit 3** du registre LCDC (`$FF40`) :
 
-- bit 3 = 0 → use `$9800`
-- bit 3 = 1 → use `$9C00`
+- bit 3 = 0 → utiliser `$9800`
+- bit 3 = 1 → utiliser `$9C00`
 
-Reference: <https://gbdev.io/pandocs/Tile_Maps.html>
-Reference (LCDC bits): <https://gbdev.io/pandocs/LCDC.html>
+Référence : <https://gbdev.io/pandocs/Tile_Maps.html>
+Référence (bits de LCDC) : <https://gbdev.io/pandocs/LCDC.html>
 
-### 3.2 The tile data (the actual pixel shapes)
+### 3.2 Les données de tuile (les formes de pixels réelles)
 
-Each tile is 8x8 pixels, but a Game Boy pixel isn't a full color — it's
-just a **2-bit number (0, 1, 2, or 3)**, called a "color index." What
-color that number actually means on screen is decided later by a palette
-([section 3.5](#35-the-palette-bgp)).
+Chaque tuile fait 8x8 pixels, mais un pixel Game Boy n'est pas une
+couleur complète — c'est juste un **nombre de 2 bits (0, 1, 2 ou 3)**,
+appelé un « index de couleur ». La couleur que ce nombre représente
+réellement à l'écran est décidée plus tard par une palette
+([section 3.5](#35-la-palette-bgp)).
 
-Each tile is stored as **16 bytes**: 2 bytes per row, 8 rows. Why 2 bytes
-per row of 8 pixels? Because each pixel needs 2 bits, and 8 pixels x 2 bits
-= 16 bits = exactly 2 bytes. The two bytes work together: for a given
-pixel at column `c` (0 = leftmost, 7 = rightmost):
+Chaque tuile est stockée sur **16 octets** : 2 octets par ligne, 8
+lignes. Pourquoi 2 octets par ligne de 8 pixels ? Parce que chaque pixel
+nécessite 2 bits, et 8 pixels x 2 bits = 16 bits = exactement 2 octets.
+Les deux octets fonctionnent ensemble : pour un pixel donné à la colonne
+`c` (0 = le plus à gauche, 7 = le plus à droite) :
 
 ```text
 bit_position = 7 - c          // bit 7 is the leftmost pixel, bit 0 is rightmost
@@ -145,15 +165,17 @@ high_bit = (second_byte >> bit_position) & 1
 color_index = (high_bit << 1) | low_bit   // combine into a 0-3 value
 ```
 
-This is exactly the decoding logic already written in
-`src/display/vram_registers.rs` (`generate_buffer`), which you already got
-working for the VRAM tile viewer. Good news: you don't need to invent this
-part again, just reuse the same formula.
+C'est exactement la logique de décodage déjà écrite dans
+`src/display/vram_registers.rs` (`generate_buffer`), que vous avez déjà
+fait fonctionner pour le visualiseur de tuiles VRAM. Bonne nouvelle :
+vous n'avez pas besoin de réinventer cette partie, réutilisez simplement
+la même formule.
 
-Here it is wrapped into a reusable function — given a tile's **resolved
-data address** (section 3.3 below computes this) and a **screen
-position** to draw it at, it decodes all 8 rows of that tile and writes
-the shaded pixels straight into the frame buffer:
+Voici cette logique encapsulée dans une fonction réutilisable — étant
+donné l'**adresse de données résolue** d'une tuile (la section 3.3
+ci-dessous calcule cela) et une **position à l'écran** où la dessiner,
+elle décode les 8 lignes de cette tuile et écrit les pixels colorés
+directement dans le buffer de frame (frame buffer) :
 
 ```rust
 /// Decodes one 8x8 tile's pixel data and writes it into the frame buffer
@@ -183,41 +205,46 @@ fn draw_tile(
 }
 ```
 
-Notice this function doesn't know or care *why* it's being called — it
-just draws one tile at one screen position. That's deliberate: section 4
-calls it from a naive full-screen loop, and it's just as usable later
-from inside the real per-dot fetcher (section 5).
+Remarquez que cette fonction ne sait pas, et ne se soucie pas, de savoir
+*pourquoi* elle est appelée — elle se contente de dessiner une tuile à
+une position d'écran. C'est délibéré : la section 4 l'appelle depuis une
+boucle naïve plein écran, et elle sera tout aussi utilisable plus tard
+depuis l'intérieur du véritable fetcher par dot (section 5).
 
-Reference: <https://gbdev.io/pandocs/Tile_Data.html>
+Référence : <https://gbdev.io/pandocs/Tile_Data.html>
 
-### 3.3 Finding a tile's address from its index
+### 3.3 Trouver l'adresse d'une tuile à partir de son index
 
-Here's a quirk: there are **two different ways** to interpret a tile
-index number into a memory address, and the game picks which one via
-**bit 4 of LCDC**:
+Voici une bizarrerie : il existe **deux façons différentes**
+d'interpréter un nombre d'index de tuile en une adresse mémoire, et le
+jeu choisit laquelle via le **bit 4 de LCDC** :
 
-- **If LCDC bit 4 = 1** ("unsigned" mode): tile index is just used as-is,
-  0 to 255, starting from address `$8000`.
+- **Si le bit 4 de LCDC = 1** (mode « non signé ») : l'index de tuile est
+  simplement utilisé tel quel, de 0 à 255, à partir de l'adresse
+  `$8000`.
 
   ```text
   address = 0x8000 + tile_index * 16
   ```
 
-- **If LCDC bit 4 = 0** ("signed" mode): tile index is treated as a signed
-  number (-128 to 127!), and the base address is `$9000` instead.
+- **Si le bit 4 de LCDC = 0** (mode « signé ») : l'index de tuile est
+  traité comme un nombre signé (-128 à 127 !), et l'adresse de base est
+  `$9000` à la place.
 
   ```text
   address = 0x9000 + (tile_index_as_signed_byte) * 16
   ```
 
-  So here, an index of 0 still means `$9000`, but an index of 255 (which
-  as a signed byte is -1) means `$9000 - 16 = $8FF0`.
+  Donc ici, un index de 0 signifie toujours `$9000`, mais un index de
+  255 (qui, en tant qu'octet signé, vaut -1) signifie
+  `$9000 - 16 = $8FF0`.
 
-Why does this exist? Historical hardware reasons — both modes overlap in
-the memory range `$8800`–`$97FF`, which is shared. You don't need to know
-why, just that you must check LCDC bit 4 before computing the address.
+Pourquoi cela existe-t-il ? Des raisons historiques liées au hardware —
+les deux modes se chevauchent dans la plage mémoire `$8800`–`$97FF`, qui
+est partagée. Vous n'avez pas besoin de savoir pourquoi, seulement que
+vous devez vérifier le bit 4 de LCDC avant de calculer l'adresse.
 
-As a reusable function:
+Sous forme de fonction réutilisable :
 
 ```rust
 /// Resolves a tile index to its tile data address, per LCDC bit 4.
@@ -232,36 +259,38 @@ fn resolve_tile_data_addr(tile_index: u8, lcdc: u8) -> usize {
 }
 ```
 
-Reference: <https://gbdev.io/pandocs/Tile_Data.html> — see "Addressing
-modes."
+Référence : <https://gbdev.io/pandocs/Tile_Data.html> — voir
+« Addressing modes ».
 
-### 3.4 Scrolling (SCX / SCY)
+### 3.4 Le scroll (SCX / SCY)
 
-Remember the tile map represents a 256x256 picture, but the screen only
-shows 160x144 of it. The **SCX** (`$FF43`) and **SCY** (`$FF42`) registers
-say "which pixel of that big 256x256 picture appears at the screen's
-top-left corner?"
+Rappelez-vous que la tilemap représente une image de 256x256, mais que
+l'écran n'en montre que 160x144. Les registres **SCX** (`$FF43`) et
+**SCY** (`$FF42`) indiquent « quel pixel de cette grande image 256x256
+apparaît dans le coin supérieur gauche de l'écran ? »
 
-So for screen pixel `(x, y)`, the corresponding pixel in the big 256x256
-background picture is:
+Donc pour le pixel d'écran `(x, y)`, le pixel correspondant dans la
+grande image de fond 256x256 est :
 
 ```text
 bg_x = (x + SCX) % 256
 bg_y = (y + SCY) % 256
 ```
 
-The `% 256` (modulo) is important: if scrolling pushes you past the edge
-of the 256x256 picture, it **wraps around** to the other side, like a
-looping wallpaper pattern, instead of just showing blank space.
+Le `% 256` (modulo) est important : si le scroll vous pousse au-delà du
+bord de l'image 256x256, il **boucle** vers l'autre côté, comme un motif
+de papier peint répétitif, plutôt que de simplement afficher un espace
+vide.
 
-Reference: <https://gbdev.io/pandocs/Scrolling.html>
+Référence : <https://gbdev.io/pandocs/Scrolling.html>
 
-### 3.5 The palette (BGP)
+### 3.5 La palette (BGP)
 
-Once you have a color index (0–3) for a pixel, that's still not a final
-color — it's an index into a 4-entry lookup table called **BGP**
-(`$FF47`, "BG Palette"). BGP is one byte that packs 4 separate 2-bit
-values, one per possible color index:
+Une fois que vous avez un index de couleur (0–3) pour un pixel, ce n'est
+toujours pas une couleur finale — c'est un index dans une table de
+correspondance à 4 entrées appelée **BGP** (`$FF47`, « BG Palette »). BGP
+est un octet qui regroupe 4 valeurs distinctes de 2 bits, une par index
+de couleur possible :
 
 ```text
 BGP byte:   bit7 bit6 | bit5 bit4 | bit3 bit2 | bit1 bit0
@@ -269,21 +298,23 @@ BGP byte:   bit7 bit6 | bit5 bit4 | bit3 bit2 | bit1 bit0
              index 3      index 2     index 1     index 0
 ```
 
-To get the final shade (also 0–3, but now meaning an actual gray shade:
-0=white, 3=black, roughly) for a given `color_index`:
+Pour obtenir la teinte finale (également 0–3, mais signifiant maintenant
+une véritable nuance de gris : 0=blanc, 3=noir, approximativement) pour
+un `color_index` donné :
 
 ```text
 shade = (BGP >> (color_index * 2)) & 0b11
 ```
 
-Reference: <https://gbdev.io/pandocs/Palettes.html>
+Référence : <https://gbdev.io/pandocs/Palettes.html>
 
-## 4. Putting it together: the simple (but wrong) way
+## 4. Assembler le tout : la méthode simple (mais incorrecte)
 
-Just to build intuition, here's the "obvious but not how hardware really
-does it" way to render an entire frame: loop over every **tile** that
-fits on screen (not every pixel), look up its index in the tile map,
-resolve and draw it, using the two functions from sections 3.2 and 3.3:
+Juste pour bâtir l'intuition, voici la façon « évidente mais pas la
+façon dont le hardware fonctionne réellement » de dessiner une frame
+entière : parcourir chaque **tuile** qui tient à l'écran (pas chaque
+pixel), rechercher son index dans la tilemap, la résoudre et la
+dessiner, en utilisant les deux fonctions des sections 3.2 et 3.3 :
 
 ```rust
 let tile_map_base: usize = 0x9800; // section 3.1 — assumes LCDC bit 3 = 0
@@ -299,58 +330,65 @@ for tile_row in 0..18 {       // 144 / 8 = 18 tile rows fit on screen
 }
 ```
 
-A few things worth noting about this example:
+Quelques points à noter sur cet exemple :
 
-- `18` and `20`, not `144`/`160` — this loops over **tiles that fit on
-  screen**, not individual pixels. Each iteration handles an entire 8x8
-  block at once, via `draw_tile`.
-- This ignores `SCX`/`SCY` scrolling entirely (assumes both are 0, and
-  always reads tile map 1) — fine as a true "naive first scene" starting
-  point, but you'd revisit this (applying section 3.4's formulas before
-  computing `tile_row`/`tile_col`) once scrolling matters.
-- For a single static frame, this produces the exact same pixels as a
-  pixel-by-pixel loop that recomputes `tile_row = y / 8` /
-  `tile_col = x / 8` for every one of the 160x144 pixels individually —
-  it's just less redundant, since each tile's lookup/decode happens once
-  here instead of 64 times.
+- `18` et `20`, pas `144`/`160` — ceci parcourt les **tuiles qui tiennent
+  à l'écran**, pas les pixels individuels. Chaque itération traite un
+  bloc entier de 8x8 d'un coup, via `draw_tile`.
+- Ceci ignore totalement le scroll `SCX`/`SCY` (suppose que les deux
+  valent 0, et lit toujours la tilemap 1) — c'est très bien comme point
+  de départ réellement « naïf pour une première scène », mais vous
+  devriez revenir dessus (en appliquant les formules de la section 3.4
+  avant de calculer `tile_row`/`tile_col`) une fois que le scroll
+  compte.
+- Pour une seule frame statique, cela produit exactement les mêmes
+  pixels qu'une boucle pixel par pixel qui recalculerait
+  `tile_row = y / 8` / `tile_col = x / 8` pour chacun des 160x144 pixels
+  individuellement — c'est simplement moins redondant, puisque la
+  recherche/le décodage de chaque tuile se fait une fois ici au lieu de
+  64 fois.
 
-This produces a correct image! But it has one deeper problem: it computes
-the **entire frame** all at once, which is **not what the real PPU
-hardware does**. Real hardware produces pixels one at a time, gradually,
-line by line, during each line's Mode 3 (172 dots). We want to build the
-real mechanism, because:
+Cela produit une image correcte ! Mais il y a un problème plus profond :
+cela calcule la **frame entière** d'un seul coup, ce qui **n'est pas ce
+que fait le véritable hardware du PPU**. Le hardware réel produit les
+pixels un par un, progressivement, ligne par ligne, pendant le Mode 3
+(172 dots) de chaque ligne. Nous voulons construire le mécanisme réel,
+parce que :
 
-- It's genuinely not much harder.
-- It's the actual architecture you'll need later for window/sprites.
-- It matches Pan Docs, so you can cross-reference your code against the
-  spec directly.
+- Ce n'est vraiment pas beaucoup plus difficile.
+- C'est l'architecture réelle dont vous aurez besoin plus tard pour la
+  window/les sprites.
+- Cela correspond aux Pan Docs, donc vous pouvez comparer votre code
+  directement à la spécification.
 
-So let's build the real version instead.
+Alors construisons plutôt la version réelle.
 
-## 5. The real mechanism: the Pixel FIFO and the Fetcher
+## 5. Le mécanisme réel : le pipeline (FIFO) de pixels et le fetcher
 
-Real hardware uses two cooperating pieces, running only during Mode 3:
+Le hardware réel utilise deux éléments qui coopèrent, fonctionnant
+uniquement pendant le Mode 3 :
 
-- **The Fetcher**: a small step-by-step machine that reads the tile map
-  and tile data ([sections 3.1–3.3](#31-the-tile-map)) and prepares a row
-  of 8 pixels at a time.
-- **The FIFO** ("First In First Out" queue): a buffer that holds up to 16
-  pending pixels. The fetcher pushes batches of 8 pixels into it. Every
-  dot, if the FIFO has pixels waiting, one gets popped off and drawn to
-  the screen.
+- **Le fetcher** : une petite machine séquentielle qui lit la tilemap et
+  les données de tuile ([sections 3.1–3.3](#31-la-tilemap)) et prépare
+  une ligne de 8 pixels à la fois.
+- **Le FIFO** (file « First In First Out ») : un buffer qui peut
+  contenir jusqu'à 16 pixels en attente. Le fetcher y pousse des lots de
+  8 pixels. À chaque dot, si le FIFO a des pixels en attente, l'un
+  d'eux est retiré et dessiné à l'écran.
 
-Think of it like a conveyor belt: the fetcher is a worker putting pixels
-onto the belt in batches of 8, and the screen is pulling one pixel off the
-belt per dot. As long as the worker keeps up (doesn't let the belt run
-empty), pixels flow out steadily.
+Pensez-y comme un tapis roulant : le fetcher est un ouvrier qui pose des
+pixels sur le tapis par lots de 8, et l'écran retire un pixel du tapis
+par dot. Tant que l'ouvrier suit le rythme (ne laisse pas le tapis se
+vider), les pixels s'écoulent de façon régulière.
 
-Reference: <https://gbdev.io/pandocs/pixel_fifo.html>
+Référence : <https://gbdev.io/pandocs/pixel_fifo.html>
 
-### 5.1 The Fetcher's 5 steps
+### 5.1 Les 5 étapes du fetcher
 
-The fetcher repeats this cycle of 5 steps, forever, during Mode 3. Here's
-the state it needs, and a sketch of each step as code, reusing
-`resolve_tile_data_addr` from section 3.3:
+Le fetcher répète ce cycle de 5 étapes, indéfiniment, pendant le Mode 3.
+Voici l'état dont il a besoin, et une esquisse de chaque étape sous
+forme de code, en réutilisant `resolve_tile_data_addr` de la section
+3.3 :
 
 ```rust
 enum FetcherStep { GetTile, GetTileDataLow, GetTileDataHigh, Sleep, Push }
@@ -414,16 +452,18 @@ fn tick_fetcher(ppu: &mut Ppu, vram: &[u8]) {
 }
 ```
 
-Each of `GetTile`, `GetTileDataLow`, `GetTileDataHigh`, and `Sleep` takes 2
-dots (so in practice you'd only actually advance the state machine every
-other dot — simplified here for clarity). `Push` is attempted every dot
-until it succeeds. So: 2+2+2+2 = 8 dots minimum per tile, plus possibly
-extra dots stuck retrying `Push` if the FIFO hasn't emptied yet.
+Chacune des étapes `GetTile`, `GetTileDataLow`, `GetTileDataHigh` et
+`Sleep` prend 2 dots (donc en pratique vous ne feriez avancer la machine
+à états que tous les deux dots — simplifié ici par souci de clarté).
+`Push` est tentée à chaque dot jusqu'à ce qu'elle réussisse. Donc :
+2+2+2+2 = 8 dots minimum par tuile, plus éventuellement des dots
+supplémentaires passés à réessayer `Push` si le FIFO ne s'est pas encore
+vidé.
 
-### 5.2 Every dot, independently: try to output a pixel
+### 5.2 Chaque dot, indépendamment : essayer de produire un pixel
 
-At the same time as the fetcher is doing its thing, **every single dot**
-during Mode 3, this also happens:
+En même temps que le fetcher fait son travail, **à chaque dot**, pendant
+le Mode 3, ceci se produit aussi :
 
 ```rust
 fn output_pixel(ppu: &mut Ppu, frame_buffer: &mut [u8]) {
@@ -439,85 +479,98 @@ fn output_pixel(ppu: &mut Ppu, frame_buffer: &mut [u8]) {
 }
 ```
 
-Once `lcd_x` reaches 160, this line's drawing is done — switch to Mode 0
-(HBlank) immediately, regardless of what the fetcher is mid-way through
-doing.
+Une fois que `lcd_x` atteint 160, le dessin de cette ligne est terminé —
+basculez immédiatement en Mode 0 (HBlank), quelle que soit l'étape en
+cours du fetcher.
 
-### 5.3 Why bother with this instead of the simple way?
+### 5.3 Pourquoi s'embêter avec cela plutôt qu'avec la méthode simple ?
 
-Because this is genuinely how the hardware works, and the "simple way"
-from [section 4](#4-putting-it-together-the-simple-but-wrong-way) is a
-shortcut that happens to produce the same final picture **only because
-we're not yet doing anything that changes mid-line** (like switching to
-the window layer partway across a row, or mixing in sprites). Once you
-want to support those features, you need the real fetcher+FIFO machinery
-anyway — so you might as well build it now and avoid a rewrite later.
+Parce que c'est véritablement ainsi que fonctionne le hardware, et que
+la « méthode simple » de la
+[section 4](#4-assembler-le-tout-la-méthode-simple-mais-incorrecte) est
+un raccourci qui ne produit la même image finale **que parce que nous ne
+faisons pas encore quoi que ce soit qui change en cours de ligne** (comme
+basculer vers la couche window au milieu d'une rangée, ou mélanger des
+sprites). Une fois que vous voudrez prendre en charge ces
+fonctionnalités, vous aurez besoin de la véritable machinerie
+fetcher+FIFO de toute façon — autant la construire maintenant et éviter
+une réécriture plus tard.
 
-## 6. What you need to add to your code (checklist)
+## 6. Ce que vous devez ajouter à votre code (checklist)
 
-On your `PPU` struct, add:
+Sur votre structure `PPU`, ajoutez :
 
-- `frame_buffer: [u8; 160 * 144]` — one shade (0–3) per pixel, storing
-  pixel `(x, y)` at index `y * 160 + x`.
-- `bg_fifo: VecDeque<u8>` — holds pending color indices (0–3), max size 16
-  in theory (we'll never actually get close to that limit in this simple
-  version).
-- `fetcher_step` — a small enum: `GetTile`, `GetTileDataLow`,
+- `frame_buffer: [u8; 160 * 144]` — une teinte (0–3) par pixel, stockant
+  le pixel `(x, y)` à l'index `y * 160 + x`.
+- `bg_fifo: VecDeque<u8>` — contient les index de couleur en attente
+  (0–3), taille maximale 16 en théorie (nous n'approcherons jamais
+  vraiment cette limite dans cette version simple).
+- `fetcher_step` — une petite énumération : `GetTile`, `GetTileDataLow`,
   `GetTileDataHigh`, `Sleep`, `Push`.
-- `fetcher_tile_col: u8` — which column (0–31) of the tile map the fetcher
-  is currently working on for this line.
-- `lcd_x: u8` — which screen column (0–159) is about to be written next.
-- Scratch fields to remember data between fetcher steps: `tile_index: u8`,
-  `tile_data_lo: u8`, `tile_data_hi: u8`.
-- `mode: PpuMode` enum: `OamScan`, `Drawing`, `HBlank`, `VBlank` — so you
-  always know which of the 4 phases ([section 2](#2-the-4-modes-and-what-happens-during-each-line))
-  you're in.
+- `fetcher_tile_col: u8` — sur quelle colonne (0–31) de la tilemap le
+  fetcher travaille actuellement pour cette ligne.
+- `lcd_x: u8` — quelle colonne d'écran (0–159) est sur le point d'être
+  écrite ensuite.
+- Des champs de travail pour mémoriser les données entre les étapes du
+  fetcher : `tile_index: u8`, `tile_data_lo: u8`, `tile_data_hi: u8`.
+- L'énumération `mode: PpuMode` : `OamScan`, `Drawing`, `HBlank`,
+  `VBlank` — pour toujours savoir dans laquelle des 4 phases
+  ([section 2](#2-les-4-modes-et-ce-qui-se-passe-pendant-chaque-ligne))
+  vous vous trouvez.
 
-Behavior to add, driven by your existing `dots` counter:
+Comportement à ajouter, piloté par votre compteur `dots` existant :
 
-1. When entering Mode 3 (dots == 80) for a line: reset `lcd_x = 0`,
-   `fetcher_tile_col = 0`, `fetcher_step = GetTile`, clear `bg_fifo`.
-2. While in Mode 3: advance the fetcher state machine
-   ([section 5.1](#51-the-fetchers-5-steps)) and attempt to output one
-   pixel ([section 5.2](#52-every-dot-independently-try-to-output-a-pixel)),
-   each dot.
-3. When `lcd_x` reaches 160: switch to Mode 0 for the rest of the line.
-4. If LCDC bit 0 is 0 (background disabled): skip all of the above, just
-   write shade 0 (white) for the entire line.
+1. En entrant en Mode 3 (dots == 80) pour une ligne : réinitialiser
+   `lcd_x = 0`, `fetcher_tile_col = 0`, `fetcher_step = GetTile`, vider
+   `bg_fifo`.
+2. Pendant le Mode 3 : faire avancer la machine à états du fetcher
+   ([section 5.1](#51-les-5-étapes-du-fetcher)) et tenter de produire un
+   pixel
+   ([section 5.2](#52-chaque-dot-indépendamment-essayer-de-produire-un-pixel)),
+   à chaque dot.
+3. Quand `lcd_x` atteint 160 : basculer en Mode 0 pour le reste de la
+   ligne.
+4. Si le bit 0 de LCDC vaut 0 (fond désactivé) : ignorer tout ce qui
+   précède, écrire simplement la teinte 0 (blanc) pour toute la ligne.
 
-> **Implementation note:** your existing `PPU::tick()` advances `dots` by
-> 4 at a time (one CPU instruction step's worth), not by 1 dot at a time.
-> The simplest fix: inside `tick()`, run the "one dot's worth of fetcher +
-> pixel output logic" in a small loop, 4 times, instead of rewriting your
-> whole timing loop to be called once per dot.
+> **Remarque d'implémentation :** votre `PPU::tick()` existant fait
+> avancer `dots` de 4 à la fois (l'équivalent d'une étape d'instruction
+> CPU), pas dot par dot. La correction la plus simple : à l'intérieur de
+> `tick()`, exécutez la « logique d'un dot du fetcher + sortie de pixel »
+> dans une petite boucle, 4 fois, plutôt que de réécrire toute votre
+> boucle de timing pour qu'elle soit appelée une fois par dot.
 
-## 7. What this guide deliberately does NOT cover
+## 7. Ce que ce guide ne couvre délibérément pas
 
-To keep this approachable, the following real behaviors are skipped. They
-don't break anything you build here — they're additions for later:
+Pour rester accessible, les comportements réels suivants sont omis. Ils
+ne cassent rien de ce que vous construisez ici — ce sont des ajouts pour
+plus tard :
 
-- **Window layer**: not handled at all yet. Good news: it reuses this
-  exact same fetcher and FIFO, just with a trigger condition that swaps
-  which tile map/row is being read. Not a rewrite, an addition.
-- **Sprites (OBJs)**: not handled at all yet. This one IS a separate
-  subsystem (its own FIFO, its own OAM-scanning logic, and pixel-mixing
-  rules) — more work, added later on top of this.
-- **Variable-length Mode 3**: real hardware's Mode 3 can take 172 to 289
-  dots depending on scrolling/sprites/window. We use a fixed 172. See
-  <https://gbdev.io/pandocs/Rendering.html#mode-3-length> for the real
-  rules, when you're ready for them.
-- **STAT interrupts** and **OAM DMA timing restrictions**: not covered
-  here.
+- **La couche window** : pas du tout traitée pour l'instant. Bonne
+  nouvelle : elle réutilise exactement ce même fetcher et ce même FIFO,
+  simplement avec une condition de déclenchement qui change quelle
+  tilemap/ligne est lue. Ce n'est pas une réécriture, c'est un ajout.
+- **Les sprites (OBJs)** : pas du tout traités pour l'instant. Celui-ci
+  EST un sous-système séparé (son propre FIFO, sa propre logique de scan
+  OAM, et des règles de mélange de pixels) — plus de travail, ajouté
+  plus tard par-dessus tout ceci.
+- **Le Mode 3 de longueur variable** : le Mode 3 du hardware réel peut
+  prendre de 172 à 289 dots selon le scroll/les sprites/la window. Nous
+  utilisons une durée fixe de 172. Voir
+  <https://gbdev.io/pandocs/Rendering.html#mode-3-length> pour les
+  règles réelles, quand vous serez prêt pour elles.
+- **Les interruptions STAT** et les **restrictions de timing du DMA
+  OAM** : non couvertes ici.
 
-## 8. Summary cheat-sheet
+## 8. Résumé-aide-mémoire
 
-| Concept | Where | Reference |
+| Concept | Où | Référence |
 |---|---|---|
-| Frame = 154 lines x 456 dots | — | Rendering.html |
-| Line = Mode 2 (80) + Mode 3 (172, simplified) + Mode 0 (rest) | — | Rendering.html#ppu-modes |
-| Tile map (which tile goes where) | `$9800`/`$9C00`, picked by LCDC bit 3 | Tile_Maps.html |
-| Tile data (actual pixel shapes) | `$8000`/`$9000` base, picked by LCDC bit 4 | Tile_Data.html |
-| 2bpp pixel decode formula | reuse from `vram_registers.rs` | Tile_Data.html |
-| Scrolling | SCX (`$FF43`), SCY (`$FF42`), wraps mod 256 | Scrolling.html |
-| Palette | BGP (`$FF47`), 2 bits per color index | Palettes.html |
-| Real per-pixel mechanism | Fetcher (5 steps) + FIFO | pixel_fifo.html |
+| Frame = 154 lignes x 456 dots | — | Rendering.html |
+| Ligne = Mode 2 (80) + Mode 3 (172, simplifié) + Mode 0 (le reste) | — | Rendering.html#ppu-modes |
+| Tilemap (quelle tuile va où) | `$9800`/`$9C00`, choisie par le bit 3 de LCDC | Tile_Maps.html |
+| Données de tuile (formes de pixels réelles) | base `$8000`/`$9000`, choisie par le bit 4 de LCDC | Tile_Data.html |
+| Formule de décodage de pixel 2bpp | réutilisée depuis `vram_registers.rs` | Tile_Data.html |
+| Scroll | SCX (`$FF43`), SCY (`$FF42`), boucle modulo 256 | Scrolling.html |
+| Palette | BGP (`$FF47`), 2 bits par index de couleur | Palettes.html |
+| Mécanisme réel par pixel | Fetcher (5 étapes) + FIFO | pixel_fifo.html |

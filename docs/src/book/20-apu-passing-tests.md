@@ -1,11 +1,12 @@
-# 20. Passing Blargg's `dmg_sound` Tests
+# 20. Réussir les tests `dmg_sound` de Blargg
 
-With all 4 channels built (Part VI so far), this chapter (`bb33d06` →
-`c8be255`) is the same kind of milestone Chapter 10 was for CPU timing:
-moving from "I implemented what the docs say" to "I verified it against
-a trusted, independent test suite" — Blargg's `dmg_sound` ROMs.
+Avec les 4 canaux construits (la partie VI jusqu'ici), ce chapitre (`bb33d06` →
+`c8be255`) est le même genre de jalon que le chapitre 10 l'était pour le timing
+du CPU : passer de « j'ai implémenté ce que dit la documentation » à « je l'ai
+vérifié par rapport à une suite de tests fiable et indépendante » — les ROMs
+`dmg_sound` de Blargg.
 
-## The test suite, one sub-test at a time
+## La suite de tests, un sous-test à la fois
 
 ```rust
 // src/crabby_boy.rs (test module)
@@ -24,50 +25,55 @@ cpu_instr_test!(sound_12, "./tests/dmg_sound/12-wave write while on.gb");
 cpu_instr_test!(sound_all, "./tests/dmg_sound.gb");
 ```
 
-Each of these targets one specific area: register read/write
-correctness, length-counter edge cases, the exact "trigger" sequence that
-happens when a channel is (re)started, sweep behavior and its overflow
-edge case, and so on — echoing the "many small, specifically targeted
-test ROMs beat one big one" lesson from Chapters 10-11 and 13.
+Chacun de ces tests cible un domaine précis : la bonne lecture/écriture des
+registres, les cas limites (edge cases) du compteur de longueur, la séquence exacte de
+« déclenchement » (trigger) qui se produit quand un canal est (re)démarré, le
+comportement du sweep et son cas limite de dépassement (overflow), etc. — faisant
+écho à la leçon « plusieurs petites ROMs de test ciblées valent mieux qu'une seule
+grosse » des chapitres 10-11 et 13.
 
-## A real class of bug this suite catches: the "trigger" sequence
+## Une véritable classe de bug que cette suite détecte : la séquence de « trigger »
 
-Several of the DMG quirks hinted at in Chapters 16/18/19 (sweep's
-mode-switch quirk, the length-counter early-clock quirk) are really all
-variations on one theme: **what exactly happens at the instant a channel
-is triggered** (written to its `NRx4` register with the trigger bit set).
-Triggering isn't just "start the channel" — it's a precise sequence:
-reload the length counter if it was zero, reload the envelope timer and
-volume, reload the sweep shadow register and immediately check for
-overflow, reset the waveform position, and (for channel 3 specifically)
-sometimes corrupt wave RAM if retriggered at exactly the wrong moment.
-Getting this sequence's *order* right, not just each piece in isolation,
-is exactly what tests `03-trigger.gb`, `06-overflow on trigger.gb`, and
-`10-wave trigger while on.gb` are designed to catch — and exactly the
-kind of thing that's nearly impossible to get right by intuition alone,
-hence leaning on the test suite rather than guessing.
+Plusieurs des bizarreries du DMG évoquées dans les chapitres 16/18/19 (la
+bizarrerie de changement de mode du sweep, la bizarrerie de cadence précoce du
+compteur de longueur) sont en réalité toutes des variations sur un même thème :
+**ce qui se passe exactement à l'instant où un canal est déclenché** (écriture dans
+son registre `NRx4` avec le bit de déclenchement activé). Déclencher n'est pas
+simplement « démarrer le canal » — c'est une séquence précise : recharger le
+compteur de longueur s'il était à zéro, recharger le minuteur (timer) et le volume
+de l'enveloppe, recharger le registre fantôme (shadow) du sweep et vérifier
+immédiatement s'il y a dépassement, réinitialiser la position de la forme d'onde,
+et (pour le canal 3 spécifiquement) parfois corrompre la RAM de forme d'onde si
+redéclenché à exactement le mauvais moment. Obtenir l'*ordre* correct de cette
+séquence, pas seulement chaque élément isolément, est exactement ce que les tests
+`03-trigger.gb`, `06-overflow on trigger.gb` et `10-wave trigger while on.gb` sont
+conçus pour détecter — et c'est exactement le genre de chose qu'il est quasiment
+impossible de bien faire par simple intuition, d'où l'intérêt de s'appuyer sur la
+suite de tests plutôt que de deviner.
 
-## `12-wave write while on.gb`: timing matters even for a "simple" write
+## `12-wave write while on.gb` : le timing compte même pour une écriture « simple »
 
-Channel 3's wave RAM (Chapter 18) can be read and written by the CPU at
-almost any time — *except* while the channel is actively playing, during
-which real hardware only allows access during one very specific narrow
-window per sample, and returns/ignores garbage otherwise. This is the
-same "certain hardware state blocks certain memory access" idea as
-VRAM/OAM access restrictions in the companion PPU guide — just
-discovered here, for wave RAM, via this specific test ROM.
+La RAM de forme d'onde du canal 3 (chapitre 18) peut être lue et écrite par le
+CPU à presque n'importe quel moment — *sauf* pendant que le canal joue
+activement, période durant laquelle le matériel réel n'autorise l'accès que
+pendant une fenêtre très étroite et précise par échantillon, et renvoie/ignore
+des données corrompues le reste du temps. C'est la même idée « un certain état
+matériel bloque un certain accès mémoire » que les restrictions d'accès à la
+VRAM/OAM du guide PPU associé — découverte ici, pour la RAM de forme d'onde, via
+cette ROM de test spécifique.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- All 4 channels verified against Blargg's `dmg_sound` suite, sub-test by
-  sub-test, as automated `cargo test` entries (Chapter 11's CI runs these
-  on every push, too).
-- A much more faithful trigger sequence and wave-RAM access timing,
-  found and fixed specifically because these tests existed.
+- Les 4 canaux vérifiés par rapport à la suite `dmg_sound` de Blargg, sous-test
+  par sous-test, sous forme d'entrées `cargo test` automatisées (la CI du
+  chapitre 11 les exécute aussi à chaque push).
+- Une séquence de déclenchement bien plus fidèle et un timing d'accès à la RAM
+  de forme d'onde corrigé, trouvés et réparés spécifiquement parce que ces tests
+  existaient.
 
-## What's still missing
+## Ce qu'il manque encore
 
-- This closes out Part VI. Sound now works and is verified — but
-  everything from here (Parts VII-VIII) was built in parallel with, not
-  after, the graphics side of the project; Part IX is where this book
-  returns to finish that side.
+- Ceci clôt la partie VI. Le son fonctionne maintenant et est vérifié — mais
+  tout ce qui suit à partir d'ici (parties VII-VIII) a été construit en parallèle
+  du côté graphique du projet, et non après ; la partie IX est l'endroit où ce
+  livre revient terminer ce côté-là.

@@ -1,13 +1,13 @@
 # 9. Timers
 
-The timer is the first hardware peripheral in this book that needs to
-track time *independently* of which instruction is currently executing —
-it has to keep advancing by exactly the right amount no matter which
-opcode just ran. This chapter (`d51d64e`) also introduces the main
-emulator loop that ties CPU execution and hardware ticking together for
-the first time.
+Le timer est le premier périphérique matériel de ce livre qui doit suivre
+le temps *indépendamment* de l'instruction en cours d'exécution — il doit
+continuer d'avancer exactement de la bonne quantité, quel que soit
+l'opcode qui vient de s'exécuter. Ce chapitre (`d51d64e`) introduit
+également la boucle principale de l'émulateur qui relie pour la première
+fois l'exécution du CPU et l'avancement (ticking) du hardware.
 
-## Four registers, one internal counter
+## Quatre registres, un compteur interne
 
 ```rust
 // src/hardware/timer.rs
@@ -19,19 +19,22 @@ pub struct Timer {
 }
 ```
 
-- **DIV** (`0xFF04`) — a free-running counter, always ticking, used by
-  games for things like random number generation. Reading it returns the
-  *top byte* of a larger internal 16-bit counter (`internal_div`); writing
-  any value to it resets that internal counter to zero.
-- **TIMA** (`0xFF05`) — a counter that increments at a configurable rate,
-  and fires the Timer interrupt when it overflows past `0xFF`.
-- **TMA** (`0xFF06`) — the value `TIMA` gets reloaded with after
-  overflowing (not necessarily 0 — games use this to control exactly how
-  often the interrupt fires).
-- **TAC** (`0xFF07`) — timer control: a bit to enable/disable `TIMA`
-  entirely, plus 2 bits selecting *how fast* it ticks.
+- **DIV** (`0xFF04`) — un compteur à défilement libre, toujours en train
+  d'avancer, utilisé par les jeux pour des choses comme la génération de
+  nombres aléatoires. Sa lecture renvoie l'*octet de poids fort* d'un
+  compteur interne 16 bits plus large (`internal_div`) ; y écrire
+  n'importe quelle valeur réinitialise ce compteur interne à zéro.
+- **TIMA** (`0xFF05`) — un compteur qui s'incrémente à une fréquence
+  configurable, et déclenche l'interruption (interrupt) du timer lors d'un
+  débordement (overflow) au-delà de `0xFF`.
+- **TMA** (`0xFF06`) — la valeur avec laquelle `TIMA` est rechargé après le
+  débordement (pas nécessairement 0 — les jeux l'utilisent pour contrôler
+  précisément la fréquence de déclenchement de l'interruption).
+- **TAC** (`0xFF07`) — contrôle du timer : un bit pour activer/désactiver
+  `TIMA` entièrement, plus 2 bits sélectionnant *à quelle vitesse* il
+  avance.
 
-## Why `internal_div` is 16 bits, not 8
+## Pourquoi `internal_div` est en 16 bits, pas 8
 
 ```rust
 pub fn read(&self, addr: u16) -> u8 {
@@ -42,12 +45,12 @@ pub fn read(&self, addr: u16) -> u8 {
 }
 ```
 
-`DIV` is an 8-bit register from the game's point of view, but the real
-hardware actually drives both `DIV` *and* `TIMA`'s variable tick rate off
-one shared, wider 16-bit counter running underneath. This matters for the
-clever trick in the next section.
+`DIV` est un registre 8 bits du point de vue du jeu, mais le vrai hardware
+pilote en réalité à la fois `DIV` *et* la fréquence variable de `TIMA` à
+partir d'un seul compteur 16 bits partagé, plus large, qui fonctionne en
+arrière-plan. Cela compte pour l'astuce ingénieuse de la section suivante.
 
-## Ticking, one cycle at a time, with falling-edge detection
+## Avancer cycle par cycle, avec détection de front descendant
 
 ```rust
 pub fn tick(&mut self, cycles: u8) -> bool {
@@ -82,29 +85,32 @@ pub fn tick(&mut self, cycles: u8) -> bool {
 }
 ```
 
-This is a neat (and very real-hardware-accurate) technique worth slowing
-down on. Instead of a separate counter for `TIMA`'s configurable speed,
-the implementation watches **one specific bit of the shared 16-bit
-counter**, and increments `TIMA` only on that bit's **falling edge** — the
-exact moment it flips from `1` to `0` (`was_set && !is_set`). Since a
-binary counter's bit `N` flips at a predictable, fixed frequency as the
-whole counter increments, picking which bit to watch is equivalent to
-picking `TIMA`'s tick frequency — which is exactly what `TAC`'s 2-bit
-`clock_select` field controls. This is the same falling-edge-of-a-counter-
-bit idea real Game Boy hardware itself actually uses internally, not just
-a coincidental implementation choice.
+C'est une technique élégante (et très fidèle au vrai hardware) qui mérite
+qu'on s'y attarde. Plutôt qu'un compteur séparé pour la vitesse
+configurable de `TIMA`, l'implémentation surveille **un bit précis du
+compteur 16 bits partagé**, et n'incrémente `TIMA` que sur le **front
+descendant (falling edge)** de ce bit — le moment exact où il passe de `1`
+à `0` (`was_set && !is_set`). Puisque le bit `N` d'un compteur binaire
+bascule à une fréquence prévisible et fixe à mesure que le compteur entier
+s'incrémente, choisir quel bit surveiller revient à choisir la fréquence
+d'avancement de `TIMA` — ce qui est exactement ce que contrôle le champ 2
+bits `clock_select` de `TAC`. C'est exactement l'idée de front descendant
+sur un bit de compteur que le vrai hardware Game Boy utilise lui-même en
+interne, pas seulement un choix d'implémentation coïncidant avec cela.
 
-The function ticks **one whole cycle at a time**, in a loop, rather than
-computing "how many times would TIMA increment over N cycles" in one
-shot — straightforward to write correctly, at the cost of being slower
-than a batched approach. That tradeoff (simplicity now, maybe optimize
-later if it matters) is a theme you'll see repeatedly in this project.
+La fonction avance **un cycle entier à la fois**, dans une boucle, plutôt
+que de calculer directement « combien de fois `TIMA` s'incrémenterait sur
+N cycles » en une seule opération — simple à écrire correctement, au prix
+d'être plus lent qu'une approche groupée (batched). Ce compromis
+(simplicité maintenant, optimisation éventuelle plus tard si cela compte)
+est un thème que vous verrez revenir régulièrement dans ce projet.
 
-## The main loop appears: `emulator.rs`
+## La boucle principale apparaît : `emulator.rs`
 
-Up to now, `main.rs` has been a quick, throwaway harness. This commit
-introduces a real structure, `CrabbyBoy`, with a `run` method that is the
-actual fetch-decode-execute-tick loop running for the rest of the book:
+Jusqu'à présent, `main.rs` était un harnais rapide, jetable. Ce commit
+introduit une vraie structure, `CrabbyBoy`, avec une méthode `run` qui est
+la véritable boucle fetch-decode-execute-tick qui s'exécute pour le reste
+du livre :
 
 ```rust
 // src/emulator.rs
@@ -133,19 +139,21 @@ loop {
 }
 ```
 
-Two changes worth highlighting against earlier chapters:
+Deux changements méritent d'être soulignés par rapport aux chapitres
+précédents :
 
-- `CPU::execute` now returns `Option<u8>` (how many cycles the
-  instruction took), not a plain `bool`. This is what finally lets
-  `bus.tick(tick)` advance the timer (and, later, every other hardware
-  peripheral) by exactly the right amount after every single instruction
-  — tying CPU execution and hardware timing together for the first time
-  in this project.
-- Even while halted, `bus.tick(4)` keeps running every loop iteration —
-  because real hardware doesn't freeze the timer/PPU/APU just because the
-  CPU itself is halted; only CPU instruction execution pauses.
+- `CPU::execute` retourne désormais `Option<u8>` (combien de cycles
+  l'instruction a pris), pas un simple `bool`. C'est ce qui permet enfin
+  à `bus.tick(tick)` de faire avancer le timer (et, plus tard, chaque
+  autre périphérique matériel) exactement de la bonne quantité après
+  chaque instruction — reliant pour la première fois dans ce projet
+  l'exécution du CPU et le timing du hardware.
+- Même en état d'attente (halt), `bus.tick(4)` continue de s'exécuter à
+  chaque itération de la boucle — car le vrai hardware ne gèle pas le
+  timer/PPU/APU simplement parce que le CPU lui-même est en halt ; seule
+  l'exécution des instructions du CPU est en pause.
 
-## Tests move into real Rust tests
+## Les tests passent en vrais tests Rust
 
 ```rust
 #[cfg(test)]
@@ -160,32 +168,36 @@ macro_rules! cpu_instr_test {
 }
 ```
 
-Instead of manually editing `main.rs` to point at a different test ROM
-and eyeballing printed output (what we've been doing since Chapter 4),
-test ROMs now run as real, automated `cargo test` tests, each one just a
-one-line macro invocation naming a ROM file. `CrabbyBoy::run` itself
-detects "Passed"/"Failed" text in the serial output (Chapter 4) and turns
-it into a proper `Result`. This is a meaningful quality-of-life jump, and
-it's the foundation Chapter 11 builds a full CI pipeline on top of.
+Au lieu de modifier manuellement `main.rs` pour pointer vers une autre ROM
+de test et d'examiner la sortie imprimée à l'œil nu (ce que nous faisions
+depuis le Chapitre 4), les ROMs de test s'exécutent désormais comme de
+vrais tests `cargo test` automatisés, chacun n'étant qu'une invocation de
+macro d'une seule ligne nommant un fichier de ROM. `CrabbyBoy::run`
+lui-même détecte le texte « Passed »/« Failed » dans la sortie série
+(Chapitre 4) et le transforme en un vrai `Result`. C'est un bond
+significatif en confort d'utilisation, et c'est la fondation sur laquelle
+le Chapitre 11 construit un pipeline complet d'intégration continue (CI).
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A real `Timer` with falling-edge-accurate `DIV`/`TIMA`/`TMA`/`TAC`
-  behavior, including firing the Timer interrupt on overflow.
-- A proper main loop (`CrabbyBoy::run`) that ticks hardware after every
-  instruction and handles `HALT` correctly waking up on a pending
-  interrupt.
-- Automated `#[test]` functions for test ROMs, replacing manual
-  `main.rs` editing.
-- New test ROMs for instruction and memory-access timing, used in the
-  next chapter.
+- Un vrai `Timer` avec un comportement `DIV`/`TIMA`/`TMA`/`TAC` précis au
+  front descendant, y compris le déclenchement de l'interruption du timer
+  au débordement.
+- Une vraie boucle principale (`CrabbyBoy::run`) qui fait avancer le
+  hardware après chaque instruction et gère correctement le réveil de
+  `HALT` sur une interruption en attente.
+- Des fonctions `#[test]` automatisées pour les ROMs de test, remplaçant
+  la modification manuelle de `main.rs`.
+- De nouvelles ROMs de test pour le timing des instructions et des accès
+  mémoire, utilisées au prochain chapitre.
 
-## What's still missing
+## Ce qui manque encore
 
-- `cpu.handle_interrupts` is called here but real interrupt *dispatch*
-  (jumping to the right vector, pushing `PC`, clearing `IME`) is only
-  properly covered in Chapter 14 — this chapter focuses on the timer
-  itself and the loop structure around it.
-- Most of the `cpu_instr_test!` invocations are still commented out at
-  this point (`read_timing` is the only one active) — memory timing
-  correctness (why that matters, and fixing it) is Chapter 10.
+- `cpu.handle_interrupts` est appelé ici mais le véritable *dispatch*
+  d'interruption (sauter au bon vecteur, empiler `PC`, effacer `IME`)
+  n'est correctement couvert qu'au Chapitre 14 — ce chapitre se concentre
+  sur le timer lui-même et la structure de boucle qui l'entoure.
+- La plupart des invocations de `cpu_instr_test!` sont encore mises en
+  commentaire à ce stade (`read_timing` est la seule active) — la
+  correction du timing des accès mémoire (pourquoi cela compte, et comment
+  le corriger) fait l'objet du Chapitre 10.

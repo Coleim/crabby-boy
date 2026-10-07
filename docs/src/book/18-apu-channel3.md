@@ -1,9 +1,9 @@
-# 18. Channel 3 — Custom Wave
+# 18. Canal 3 — Onde personnalisée
 
-Channel 3 (`16b3864`) is the first channel that genuinely needs its own
-struct: instead of a fixed 4-shape duty cycle (Chapter 16), it plays back
-an arbitrary, game-supplied 32-sample waveform, on a loop, at a
-controllable pitch and volume.
+Le canal 3 (`16b3864`) est le premier canal qui a réellement besoin de sa propre
+structure : au lieu d'un duty cycle fixe à 4 formes (chapitre 16), il relit en
+boucle une forme d'onde (wave) arbitraire à 32 échantillons fournie par le jeu, à une
+hauteur et un volume contrôlables.
 
 ## `WaveChannel`
 
@@ -28,19 +28,19 @@ pub struct WaveChannel {
 }
 ```
 
-## Wave RAM: 16 bytes holding 32 samples
+## Wave RAM : 16 octets contenant 32 échantillons
 
-`wave_ram` is 16 bytes, but the waveform itself has 32 samples
-(`wave_index` ranges 0..31) — each byte packs **two 4-bit samples**
-(a "nibble" each), the same "pack two small values into one byte" idea
-you've now seen several times (2-bit flags in `F`, Chapter 3; 2-bit color
-indices in VRAM tiles, in the companion PPU guide). A game writes
-whatever 32-sample waveform it wants into this region (`0xFF30`-`0xFF3F`
-in the real memory map) before playing channel 3 — this is what makes
-channel 3 sound different from game to game, unlike channels 1/2/4 whose
-sound character is fixed by hardware.
+`wave_ram` fait 16 octets, mais la forme d'onde elle-même a 32 échantillons
+(`wave_index` va de 0 à 31) — chaque octet compresse **deux échantillons de 4 bits**
+(un « nibble » chacun), la même idée de « compresser deux petites valeurs dans un
+octet » que vous avez déjà rencontrée plusieurs fois (les flags sur 2 bits dans `F`,
+chapitre 3 ; les indices de couleur sur 2 bits dans les tuiles VRAM, dans le guide PPU
+associé). Un jeu écrit la forme d'onde à 32 échantillons de son choix dans cette
+région (`0xFF30`-`0xFF3F` dans la carte mémoire réelle) avant de lire le canal 3 —
+c'est ce qui fait que le canal 3 sonne différemment d'un jeu à l'autre, contrairement
+aux canaux 1/2/4 dont le caractère sonore est fixé par le matériel.
 
-## A dedicated enable/disable flag: the DAC
+## Un drapeau d'activation/désactivation dédié : le DAC
 
 ```rust
 pub fn write_nr0(&mut self, val: u8) {
@@ -51,16 +51,16 @@ pub fn write_nr0(&mut self, val: u8) {
 }
 ```
 
-This introduces a distinction worth understanding once, since it recurs
-for every channel (noticeable again in Chapter 19's noise channel): a
-channel has both an **enabled** flag (is it currently actively playing,
-e.g. has its length counter not yet run out) and a separate **DAC
-enabled** concept (is its internal digital-to-analog converter even
-switched on at all). Turning the DAC off immediately silences the
-channel regardless of anything else — it's a more fundamental "off
-switch" than the length counter or envelope.
+Cela introduit une distinction qu'il vaut la peine de comprendre une bonne fois pour
+toutes, car elle revient pour chaque canal (à nouveau perceptible dans le canal de bruit
+(noise) du chapitre 19) : un canal a à la fois un drapeau **enabled** (est-il actuellement
+en train de jouer activement, par exemple son compteur de longueur n'est-il pas encore
+écoulé) et un concept distinct de **DAC enabled** (son convertisseur numérique-analogique
+interne est-il même allumé). Éteindre le DAC coupe immédiatement le son du canal
+indépendamment de tout le reste — c'est un interrupteur plus fondamental que le
+compteur de longueur ou l'enveloppe.
 
-## Register layout: period split across two registers
+## Disposition des registres : la période répartie sur deux registres
 
 ```rust
 pub fn write_nr3(&mut self, val: u8) {
@@ -75,18 +75,18 @@ pub fn write_nr4(&mut self, val: u8, length_clock_on_write: bool) {
 }
 ```
 
-The channel's pitch ("period") is an 11-bit value, too wide for one
-8-bit register, so it's split: `NR3` holds the low 8 bits, `NR4` holds
-the high 3 bits (plus unrelated flags like `length_enabled` packed into
-its other bits). Each write combines the new byte with a bitmask
-preserving the *other* half of the period that this particular register
-doesn't own (`self.period & 0b111_0000_0000` keeps the high bits
-unchanged while replacing the low ones, and vice versa). This "split one
-logical value across two addressable registers, with masks to avoid
-clobbering the other half" pattern is common across Game Boy I/O
-registers — you'll want to recognize it on sight.
+La hauteur du canal (« period ») est une valeur de 11 bits, trop large pour un
+registre de 8 bits, donc elle est séparée : `NR3` contient les 8 bits de poids faible,
+`NR4` les 3 bits de poids fort (plus des flags sans rapport comme `length_enabled`
+compressés dans ses autres bits). Chaque écriture combine le nouvel octet avec un
+masque préservant l'*autre* moitié de la période que ce registre particulier ne
+possède pas (`self.period & 0b111_0000_0000` conserve les bits de poids fort inchangés
+tout en remplaçant ceux de poids faible, et vice-versa). Ce schéma « répartir une
+valeur logique sur deux registres adressables, avec des masques pour éviter d'écraser
+l'autre moitié » est courant parmi les registres d'E/S de la Game Boy — vous voudrez
+le reconnaître au premier coup d'œil.
 
-## The DMG length-counter quirk, written down in code
+## La bizarrerie du compteur de longueur du DMG, écrite en code
 
 ```rust
 // DMG quirk: enabling length can immediately clock it depending on frame
@@ -97,26 +97,27 @@ if !was_length_enabled && self.length_enabled && length_clock_on_write && self.l
 }
 ```
 
-Another example of the "looks like a bug, is actually documented hardware
-behavior" theme from Chapter 16: on original DMG hardware, flipping the
-length-enable bit on at exactly the wrong moment in the frame sequencer's
-cycle causes one extra, immediate length-counter decrement, as a side
-effect of how the length counter's clock and the enable-bit check happen
-to interact in the real circuit. `length_clock_on_write` is how the APU
-communicates "are we currently at one of those exact moments" into this
-method.
+Un autre exemple du thème « ça ressemble à un bug, mais c'est en réalité un
+comportement matériel documenté » du chapitre 16 : sur le matériel DMG original,
+activer le bit d'activation de longueur à exactement le mauvais moment dans le
+cycle du séquenceur de trame provoque une décrémentation immédiate et
+supplémentaire du compteur de longueur, en conséquence de la manière dont
+l'horloge du compteur de longueur et la vérification du bit d'activation
+interagissent dans le circuit réel. `length_clock_on_write` est la façon dont
+l'APU communique « sommes-nous actuellement à l'un de ces moments précis » à
+cette méthode.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Channel 3 playing back an arbitrary, game-provided waveform at
-  controllable pitch/volume.
-- A clearer understanding of DAC-enabled vs. channel-enabled as two
-  separate concepts.
-- The split-register and quirky-length-counter patterns, both of which
-  reappear in channel 4.
+- Le canal 3 relisant une forme d'onde arbitraire fournie par le jeu, à une
+  hauteur/volume contrôlables.
+- Une compréhension plus claire de DAC activé vs. canal activé comme deux
+  concepts distincts.
+- Les schémas de registre réparti et de compteur de longueur capricieux, qui
+  réapparaissent tous deux dans le canal 4.
 
-## What's still missing
+## Ce qu'il manque encore
 
-- Channel 4 (noise) still to come, next chapter.
-- Nothing here is yet verified against Blargg's `dmg_sound` test suite —
-  that's Chapter 20, after all 4 channels exist.
+- Le canal 4 (bruit) reste à venir, au prochain chapitre.
+- Rien ici n'est encore vérifié par rapport à la suite de tests `dmg_sound` de
+  Blargg — ce sera le chapitre 20, une fois que les 4 canaux existeront.

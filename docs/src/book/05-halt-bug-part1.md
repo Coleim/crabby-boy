@@ -1,49 +1,54 @@
-# 5. The Halt Bug, Part 1
+# 5. Le bug HALT, partie 1
 
-Tucked into the tail end of the opcode grind (`dc9a258`, with a dedicated
-test ROM added right after in `5631832`) is one of the Game Boy CPU's
-most infamous quirks: the **HALT bug**. It's a great first example of
-something this book will come back to more than once — real hardware
-sometimes behaves in ways that look like obvious bugs, except they're not
-bugs, they're exactly what the chip does, and your emulator has to
-reproduce the "bug" on purpose.
+Blotti à la toute fin de l'effort sur les opcodes (`dc9a258`, avec une
+ROM de test dédiée ajoutée juste après dans `5631832`) se trouve l'une
+des bizarreries les plus célèbres du CPU de la Game Boy : le **bug
+HALT**. C'est un excellent premier exemple de quelque chose auquel ce
+livre reviendra plus d'une fois — le hardware réel se comporte parfois
+de manières qui ressemblent à des bugs évidents, sauf qu'il ne s'agit pas
+de bugs, c'est exactement ce que fait la puce, et votre émulateur doit
+reproduire ce « bug » intentionnellement.
 
-## What `HALT` is supposed to do
+## Ce que `HALT` est censé faire
 
-`HALT` (opcode `0x76`) tells the CPU "stop executing instructions and do
-nothing until an interrupt happens." This saves power on real hardware,
-and in software terms it's simply: stop advancing, keep ticking other
-components (timer, PPU, APU), and resume once an interrupt becomes
-pending.
+`HALT` (opcode `0x76`) dit au CPU « arrête d'exécuter des instructions et
+ne fais rien jusqu'à ce qu'une interruption (interrupt) survienne ». Cela
+économise de l'énergie sur le hardware réel, et en termes logiciels,
+c'est simplement : arrêter d'avancer, continuer à faire avancer
+(ticking) les autres composants (timer, PPU, APU), et reprendre dès
+qu'une interruption devient en attente.
 
 ```rust
 pub halt: bool,
 ```
 
-A single boolean flag. When true, the main loop skips CPU execution
-entirely (we'll see this loop in Chapter 11) until something sets it back
-to false.
+Un simple flag booléen. Quand il est vrai, la boucle principale saute
+entièrement l'exécution du CPU (nous verrons cette boucle au Chapitre 11)
+jusqu'à ce que quelque chose le repositionne à faux.
 
-## The quirk: `HALT` with interrupts pending but disabled
+## La bizarrerie : `HALT` avec des interruptions en attente mais désactivées
 
-Here's the oddity. There are two independent concepts:
+Voici l'étrangeté. Il existe deux concepts indépendants :
 
-- **IME** ("Interrupt Master Enable") — a CPU-internal switch: are
-  interrupts allowed to actually interrupt the CPU right now at all?
-- **IE** (`0xFFFF`) and **IF** (`0xFF0F`) — which interrupt *types* are
-  enabled, and which are currently pending, regardless of IME.
+- **IME** (« Interrupt Master Enable ») — un interrupteur interne au
+  CPU : les interruptions sont-elles autorisées à réellement interrompre
+  le CPU en ce moment ?
+- **IE** (`0xFFFF`) et **IF** (`0xFF0F`) — quels *types* d'interruption
+  sont activés, et lesquels sont actuellement en attente, indépendamment
+  d'IME.
 
-If a game executes `HALT` at the exact moment `IME` is off, but some
-interrupt is both enabled (`IE`) and already pending (`IF`), real
-hardware does **not** halt at all. Instead, it immediately continues
-execution — but with a bug: **the next instruction's opcode byte gets
-fetched twice**, i.e. `PC` fails to advance for one fetch, silently
-re-executing whatever single-byte effect the next opcode had. This is
-exactly what the name "HALT bug" refers to — not a bug in an emulator,
-but a documented quirk of the real chip that every accurate emulator must
-reproduce.
+Si un jeu exécute `HALT` au moment précis où `IME` est désactivé, mais
+qu'une interruption est à la fois activée (`IE`) et déjà en attente
+(`IF`), le hardware réel ne se met **pas du tout** en pause (halt). Il
+continue immédiatement l'exécution — mais avec un bug : **l'octet
+d'opcode de l'instruction suivante est récupéré (fetched) deux fois**,
+c'est-à-dire que `PC` échoue à avancer pour une récupération, ré-exécutant
+silencieusement l'effet sur un seul octet que l'opcode suivant avait
+produit. C'est exactement ce à quoi renvoie le nom « bug HALT » — non pas
+un bug dans un émulateur, mais une bizarrerie documentée de la puce
+réelle que tout émulateur fidèle doit reproduire.
 
-## First attempt at implementing it
+## Première tentative d'implémentation
 
 ```rust
 pub halt_bug: bool,
@@ -63,7 +68,7 @@ pub halt_bug: bool,
 }
 ```
 
-And then, at the very top of the fetch step:
+Et ensuite, tout en haut de l'étape de récupération (fetch) :
 
 ```rust
 let mut next_pc: u16 = if self.halt_bug {
@@ -74,42 +79,49 @@ let mut next_pc: u16 = if self.halt_bug {
 };
 ```
 
-The logic in plain language: when `HALT` runs, check whether `IME` is off
-*and* an enabled, pending interrupt already exists. If so, set
-`halt_bug = true` instead of `halt = true`. Next time an opcode is
-fetched, if `halt_bug` was set, don't advance `PC` past the opcode we're
-about to execute — meaning the *following* fetch will read that same byte
-location again. That's the "duplicate fetch" effect, reproduced.
+La logique en langage clair : quand `HALT` s'exécute, vérifier si `IME`
+est désactivé *et* qu'une interruption activée et en attente existe déjà.
+Si oui, positionner `halt_bug = true` au lieu de `halt = true`. La
+prochaine fois qu'un opcode est récupéré, si `halt_bug` était positionné,
+ne pas avancer `PC` au-delà de l'opcode que nous sommes sur le point
+d'exécuter — ce qui signifie que la récupération *suivante* relira ce
+même emplacement d'octet. C'est l'effet de « récupération dupliquée »,
+reproduit.
 
-## Why this gets its own test ROM
+## Pourquoi cela mérite sa propre ROM de test
 
-Edge-case CPU behavior like this is exactly the kind of thing that's easy
-to implement subtly wrong (off-by-one in exactly *which* byte gets
-re-fetched, or getting the IME/IE/IF condition slightly wrong), and
-subtly wrong versions can still pass most games by luck while failing
-specific, deliberately crafted test cases. That's why the community
-maintains targeted test ROMs like `tests/halt_bug.gb`, added here
-specifically to validate this one behavior in isolation, independent of
-the broader `cpu_instrs.gb` suite from Chapter 4.
+Un comportement de CPU aussi marginal (edge case) que celui-ci est
+exactement le genre de chose qu'il est facile d'implémenter de façon
+subtilement incorrecte (décalage d'un cran dans exactement *quel* octet
+est re-récupéré, ou une condition IME/IE/IF légèrement fausse), et des
+versions subtilement incorrectes peuvent encore réussir la plupart des
+jeux par chance tout en échouant sur des cas de test spécifiques et
+délibérément conçus. C'est pourquoi la communauté maintient des ROMs de
+test ciblées comme `tests/halt_bug.gb`, ajoutée ici spécifiquement pour
+valider ce seul comportement de manière isolée, indépendamment de la
+suite `cpu_instrs.gb` plus large du Chapitre 4.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A `halt` flag that stops CPU execution until an interrupt.
-- A first attempt at the HALT bug: detecting the "IME off, interrupt
-  already pending" condition and corrupting the next fetch instead of
-  truly halting.
-- A dedicated test ROM to validate this behavior.
+- Un flag `halt` qui arrête l'exécution du CPU jusqu'à une interruption.
+- Une première tentative pour le bug HALT : détecter la condition « IME
+  désactivé, interruption déjà en attente » et corrompre la prochaine
+  récupération au lieu de réellement mettre en pause.
+- Une ROM de test dédiée pour valider ce comportement.
 
-## What's still missing
+## Ce qui manque encore
 
-- This first attempt is **not fully correct yet** — notice the condition
-  `!self.ime && (ie & if_flag) != 0` is checked, but there's still a gap
-  in exactly how the corrupted fetch interacts with multi-byte
-  instructions, which surfaces as a real bug later. Chapter 13 ("The Halt
-  Bug, Part 2") comes back to fix it properly, once there's an actual
-  interrupt source (the PPU's VBlank, from Part V) to trigger it against
-  in practice rather than only in the isolated test ROM.
-- No interrupt *handling* exists yet at all at this point (no jumping to
-  interrupt vectors, no `IE`/`IF` clearing on dispatch) — just enough of
-  the `IME`/`IE`/`IF` concept to make this one instruction's quirk
-  testable. Full interrupt handling is Chapter 14.
+- Cette première tentative n'est **pas encore totalement correcte** —
+  remarquez que la condition `!self.ime && (ie & if_flag) != 0` est
+  vérifiée, mais il reste encore un écart dans la façon exacte dont la
+  récupération corrompue interagit avec les instructions multi-octets,
+  ce qui apparaît comme un véritable bug plus tard. Le Chapitre 13
+  (« Le bug HALT, partie 2 ») revient corriger cela proprement, une fois
+  qu'il existe une véritable source d'interruption (le VBlank du PPU, de
+  la Partie V) contre laquelle la déclencher en pratique plutôt que
+  seulement dans la ROM de test isolée.
+- Aucune *gestion* d'interruption n'existe encore du tout à ce stade (pas
+  de saut vers les vecteurs d'interruption, pas d'effacement d'`IE`/`IF`
+  au dispatch) — juste assez du concept `IME`/`IE`/`IF` pour rendre
+  testable la bizarrerie de cette seule instruction. La gestion complète
+  des interruptions, c'est le Chapitre 14.

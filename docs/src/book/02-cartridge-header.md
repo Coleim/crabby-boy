@@ -1,14 +1,14 @@
-# 2. Parsing the Cartridge Header
+# 2. Analyse de l'en-tête de la cartouche
 
-Every Game Boy cartridge reserves a small, fixed region of ROM —
-`0x0100`–`0x014F` — for a **header**: structured metadata about the game
-itself (title, what hardware features it needs, how big its ROM/RAM are,
-etc.). The original hardware's boot ROM reads this header before handing
-control to the game. We do the same.
+Chaque cartouche Game Boy réserve une petite région fixe de la ROM —
+`0x0100`–`0x014F` — pour un **en-tête** : des métadonnées structurées sur
+le jeu lui-même (titre, fonctionnalités hardware requises, taille de sa
+ROM/RAM, etc.). La boot ROM du hardware original lit cet en-tête avant de
+céder le contrôle au jeu. Nous faisons de même.
 
-Reference: <https://gbdev.io/pandocs/The_Cartridge_Header.html>
+Référence : <https://gbdev.io/pandocs/The_Cartridge_Header.html>
 
-## The header struct
+## La structure de l'en-tête
 
 ```rust
 // src/header.rs
@@ -30,10 +30,10 @@ pub struct CartdrigeHeader {
 }
 ```
 
-Each field corresponds to a specific byte range inside the header. Let's
-go through the interesting ones.
+Chaque champ correspond à une plage d'octets précise à l'intérieur de
+l'en-tête. Passons en revue les plus intéressants.
 
-## The Nintendo logo, and why we validate it
+## Le logo Nintendo, et pourquoi nous le validons
 
 ```rust
 pub fn is_valid(&self) -> Result<(), String> {
@@ -48,15 +48,17 @@ pub fn is_valid(&self) -> Result<(), String> {
 }
 ```
 
-Why bother checking this? On real hardware, the boot ROM actually
-**displays** this logo bitmap on screen while booting, and refuses to
-continue if the bytes don't match this exact sequence. This was
-Nintendo's way of enforcing licensing: cloning a cartridge meant also
-illegally copying Nintendo's copyrighted logo bitmap into it. We're not
-emulating the boot ROM animation (yet), but we reuse the same check as a
-quick sanity test that we're reading a real, intact ROM file.
+Pourquoi se donner la peine de vérifier cela ? Sur le vrai hardware, la
+boot ROM **affiche** réellement ce bitmap de logo à l'écran pendant le
+démarrage, et refuse de continuer si les octets ne correspondent pas
+exactement à cette séquence précise. C'était la façon dont Nintendo
+faisait respecter ses licences : cloner une cartouche impliquait aussi de
+copier illégalement le bitmap du logo protégé par le droit d'auteur de
+Nintendo. Nous n'émulons pas (encore) l'animation de la boot ROM, mais
+nous réutilisons la même vérification comme un test de cohérence rapide
+pour nous assurer que nous lisons un véritable fichier ROM intact.
 
-## Title and manufacturer code: just bytes that happen to be text
+## Titre et code fabricant : simplement des octets qui se trouvent être du texte
 
 ```rust
 fn parse_title(rom: &[u8]) -> String {
@@ -74,17 +76,19 @@ fn parse_manufacturercode(rom: &[u8]) -> String {
 }
 ```
 
-This is a good moment to internalize something important: **a "byte" has
-no inherent meaning** — it's just a number from 0 to 255. Whether a given
-byte means "part of an instruction," "part of a picture," or "a text
-character" depends entirely on *where* it is and how the code reading it
-chooses to interpret it. Here, bytes `0x0134`–`0x0143` are defined (by
-convention, by Nintendo) to mean "ASCII text, the game's title" — so we
-read them and convert to a `String`. A few bytes earlier and the exact
-same kind of raw byte would mean something totally different (part of the
-logo bitmap). Keep this in mind for every future chapter.
+C'est un bon moment pour intégrer quelque chose d'important : **un
+« octet » n'a pas de signification inhérente** — c'est juste un nombre de
+0 à 255. Qu'un octet donné signifie « une partie d'une instruction »,
+« une partie d'une image », ou « un caractère de texte » dépend
+entièrement de l'endroit où il se trouve et de la manière dont le code qui
+le lit choisit de l'interpréter. Ici, les octets `0x0134`–`0x0143` sont
+définis (par convention, par Nintendo) pour signifier « du texte ASCII, le
+titre du jeu » — nous les lisons donc et les convertissons en `String`.
+Quelques octets plus tôt et le même type d'octet brut signifierait
+quelque chose de totalement différent (une partie du bitmap du logo).
+Gardez cela à l'esprit pour chaque chapitre à venir.
 
-## Licensee code: old format vs. new format
+## Code du licencié : ancien format vs. nouveau format
 
 ```rust
 fn parse_licensee(rom: &[u8]) -> String {
@@ -101,18 +105,20 @@ fn parse_licensee(rom: &[u8]) -> String {
 }
 ```
 
-This one teaches a recurring Game Boy theme: **backwards compatibility
-quirks baked directly into the data format.** Older cartridges store the
-publisher ("licensee") as a single byte at `0x014B`, looked up in an old
-table. Later, Nintendo ran out of codes, so newer cartridges set
-`0x014B = 0x33` as a sentinel meaning "ignore me, the real code is two
-ASCII characters over at `0x0144`-`0x0145`, look it up in the *new*
-table instead." Both lookup tables (`OLD_LICENSEE_MAP`,
-`NEW_LICENSEE_MAP`) are large hardcoded maps in
-`src/mappings/licensee_map.rs` — not something you derive, just data you
-transcribe from the spec.
+Celui-ci illustre un thème récurrent de la Game Boy : **des bizarreries de
+rétrocompatibilité intégrées directement dans le format de données.** Les
+cartouches plus anciennes stockent l'éditeur (le « licencié ») sous forme
+d'un seul octet à `0x014B`, recherché dans une ancienne table. Plus tard,
+Nintendo a manqué de codes, donc les cartouches plus récentes définissent
+`0x014B = 0x33` comme une sentinelle signifiant « ignore-moi, le vrai code
+se trouve sous forme de deux caractères ASCII à `0x0144`-`0x0145`,
+recherche-le plutôt dans la *nouvelle* table ». Les deux tables de
+correspondance (lookup tables) (`OLD_LICENSEE_MAP`, `NEW_LICENSEE_MAP`)
+sont de grandes tables codées en dur dans `src/mappings/licensee_map.rs`
+— ce n'est pas quelque chose que l'on calcule, juste des données qu'on
+retranscrit depuis la spécification.
 
-## Cartridge type, ROM size, RAM size: more table lookups
+## Type de cartouche, taille de ROM, taille de RAM : encore des recherches en table
 
 ```rust
 fn parse_cartidge(rom: &[u8]) -> String {
@@ -128,31 +134,36 @@ fn parse_ram_size(rom: &[u8]) -> String {
 }
 ```
 
-The **cartridge type** byte (`0x0147`) is one of the most important fields
-in the whole header: it tells us whether this cartridge is "plain ROM"
-(simple, everything fits in the 32KB directly addressable range) or uses a
-**Memory Bank Controller** (a little extra chip on the cartridge that lets
-games larger than 32KB swap chunks of ROM in and out of the CPU's address
-space on demand). We don't act on this information yet — Chapter 8 is
-where ROM banking actually gets implemented — but we already parse and
-display it here.
+L'octet du **type de cartouche** (`0x0147`) est l'un des champs les plus
+importants de tout l'en-tête : il nous indique si cette cartouche est une
+« ROM simple » (tout tient directement dans la plage adressable de 32 Ko)
+ou utilise un **Memory Bank Controller** (une petite puce supplémentaire
+sur la cartouche qui permet aux jeux plus gros que 32 Ko de faire entrer
+et sortir des morceaux de ROM dans l'espace d'adressage du CPU à la
+demande). Nous n'agissons pas encore sur cette information — c'est au
+Chapitre 8 que le banking de ROM est réellement implémenté — mais nous
+l'analysons et l'affichons déjà ici.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A `CartdrigeHeader` that reads and labels every field of the header
-  region, using lookup tables for the fields that are "codes" rather than
-  raw numbers or text (cartridge type, licensee, ROM/RAM size).
-- Logo validation, as an early "is this a real, undamaged ROM file" check.
-- A `print()` method to dump the whole parsed header for debugging —
-  invaluable in these early stages, since there's no CPU yet to actually
-  run the game and show you if parsing was right.
+- Un `CartdrigeHeader` qui lit et étiquette chaque champ de la région
+  d'en-tête, en utilisant des tables de correspondance pour les champs
+  qui sont des « codes » plutôt que des nombres bruts ou du texte (type
+  de cartouche, licencié, taille ROM/RAM).
+- La validation du logo, comme première vérification « est-ce un vrai
+  fichier ROM non endommagé ».
+- Une méthode `print()` pour afficher l'intégralité de l'en-tête analysé
+  à des fins de débogage — précieuse à ces débuts, puisqu'il n'y a pas
+  encore de CPU pour réellement faire tourner le jeu et vous montrer si
+  l'analyse était correcte.
 
-## What's still missing
+## Ce qui manque encore
 
-- The `entry_point`, `version_number`, `header_checksum`, and
-  `global_checksum` fields exist in the struct but aren't actually parsed
-  yet at this point in history (they stay at their default `0`) — only
-  filled in properly later.
-- Nothing *acts* on the cartridge type yet (no ROM banking implementation
-  — see Chapter 8).
-- Still no CPU. That's next, in Part II.
+- Les champs `entry_point`, `version_number`, `header_checksum`, et
+  `global_checksum` existent dans la structure mais ne sont pas encore
+  réellement analysés à ce stade de l'historique (ils restent à leur
+  valeur par défaut `0`) — ils ne seront remplis correctement que plus
+  tard.
+- Rien n'*agit* encore sur le type de cartouche (pas d'implémentation du
+  banking de ROM — voir Chapitre 8).
+- Toujours pas de CPU. C'est la suite, dans la Partie II.

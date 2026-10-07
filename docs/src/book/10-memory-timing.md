@@ -1,25 +1,27 @@
-# 10. Memory Timing Correctness
+# 10. Correction du timing mémoire
 
-Passing `cpu_instrs.gb` (Chapter 4) proves your instructions produce the
-*right results*. It does **not** prove they take the *right amount of
-time*, or that memory gets touched at the *right moments* during each
-instruction. This chapter (`ca64263` → `6e90bef`) is about that second,
-much subtler kind of correctness — and about a new category of test ROM
-that specifically targets it.
+Réussir `cpu_instrs.gb` (Chapitre 4) prouve que vos instructions
+produisent les *bons résultats*. Cela ne prouve **pas** qu'elles prennent
+le *bon temps*, ni que la mémoire est touchée aux *bons moments* au cours
+de chaque instruction. Ce chapitre (`ca64263` → `6e90bef`) porte sur ce
+second type de correction, bien plus subtil — et sur une nouvelle
+catégorie de ROM de test qui cible spécifiquement cela.
 
-## Why "tick once per instruction" isn't accurate enough
+## Pourquoi « avancer une fois par instruction » n'est pas assez précis
 
-Chapter 9's main loop called `bus.tick(cycles)` once per instruction,
-after `cpu.execute` finished. On real hardware, though, a single
-instruction isn't an atomic event from the rest of the system's point of
-view — it's made of multiple distinct memory accesses (read opcode, maybe
-read an operand byte, maybe read/write a memory address), each taking its
-own slice of time, with the timer/PPU/APU all continuing to tick
-*between* those individual accesses, not just once at the very end. An
-instruction that reads memory twice and writes once should let the rest
-of the hardware advance in 3 separate steps, not one lump sum at the end.
+La boucle principale du Chapitre 9 appelait `bus.tick(cycles)` une seule
+fois par instruction, après que `cpu.execute` ait terminé. Sur le vrai
+hardware, cependant, une seule instruction n'est pas un événement
+atomique du point de vue du reste du système — elle est composée de
+plusieurs accès mémoire distincts (lire l'opcode, éventuellement lire un
+octet d'opérande, éventuellement lire/écrire une adresse mémoire), chacun
+prenant sa propre tranche de temps, le timer/PPU/APU continuant tous
+d'avancer (tick) *entre* ces accès individuels, pas seulement une fois à
+la toute fin. Une instruction qui lit la mémoire deux fois et écrit une
+fois devrait laisser le reste du hardware avancer en 3 étapes séparées, pas
+en une seule somme globale à la fin.
 
-## The fix: tick on every single bus access
+## La correction : avancer à chaque accès au bus
 
 ```rust
 // src/bus/bus.rs
@@ -42,42 +44,48 @@ fn _read(&self, addr: u16) -> u8 { /* the actual match on addr, as before */ }
 fn _write(&mut self, addr: u16, val: u8) { /* ditto */ }
 ```
 
-The real read/write logic moves into private `_read`/`_write` helpers,
-and the public `read`/`write` wrap them with an automatic
-`internal_tick()` call after every single access. This is a satisfying
-refactor: every single place in the whole codebase that touches memory —
-every instruction handler, from Chapter 3 onward — now automatically
-advances the timer (and later PPU/APU) by the correct amount, without
-having to remember to do it manually anywhere. `Bus::tick(cycles)`
-(Chapter 9's version, called once per instruction) disappears entirely,
-replaced by this call embedded directly in `read`/`write`.
+La vraie logique de lecture/écriture se déplace dans des fonctions
+d'assistance (helpers) privées `_read`/`_write`, et les fonctions
+publiques `read`/`write` les enveloppent (wrap) d'un appel automatique à
+`internal_tick()` après chaque accès. C'est un remaniement (refactor)
+satisfaisant : chaque endroit du code source qui touche à la mémoire —
+chaque gestionnaire d'instruction, depuis le Chapitre 3 — fait désormais
+automatiquement avancer le timer (et plus tard le PPU/APU) de la bonne
+quantité, sans avoir à se rappeler de le faire manuellement où que ce
+soit. `Bus::tick(cycles)` (la version du Chapitre 9, appelée une fois par
+instruction) disparaît entièrement, remplacé par cet appel intégré
+directement dans `read`/`write`.
 
-Notice the ripple effect: `read`/`write` now need `&mut self` instead of
-`&self`/`&mut self` respectively (`read` wasn't mutating before — now it
-has to, to tick internal state). This is exactly the kind of change that
-looks small in a diff but touches every call site across the whole
-project, because `read` is called from dozens of instruction handlers.
+Remarquez l'effet d'entraînement : `read`/`write` nécessitent désormais
+`&mut self` au lieu de `&self`/`&mut self` respectivement (`read` ne
+mutait pas d'état auparavant — elle doit maintenant le faire, pour faire
+avancer l'état interne). C'est exactement le genre de changement qui
+paraît petit dans un diff mais touche chaque site d'appel dans tout le
+projet, car `read` est appelée depuis des dizaines de gestionnaires
+d'instructions.
 
-## A new family of test ROMs: `mem_timing`
+## Une nouvelle famille de ROMs de test : `mem_timing`
 
-With per-access ticking in place, a new category of test ROM becomes
-meaningful: Blargg's `mem_timing` and `mem_timing-2` suites, specifically
-designed to catch exactly this class of bug (an instruction that
-*computes* the right result, but touches memory at the wrong moment
-relative to the clock). These joined the test suite alongside
-`instr_timing.gb` (overall instruction cycle-count correctness).
+Avec l'avancement par accès en place, une nouvelle catégorie de ROM de
+test devient pertinente : les suites `mem_timing` et `mem_timing-2` de
+Blargg, spécifiquement conçues pour détecter précisément ce type de bug
+(une instruction qui *calcule* le bon résultat, mais touche la mémoire au
+mauvais moment par rapport à l'horloge). Elles rejoignent la suite de test
+aux côtés de `instr_timing.gb` (correction du nombre de cycles
+d'instruction globale).
 
-## Two different ways test ROMs report results
+## Deux manières différentes dont les ROMs de test rapportent les résultats
 
-Working through these new test ROMs surfaces something worth
-documenting once and reusing forever: not all Blargg-style test ROMs
-report results the same way. This project's own notes
-(`TEST_ROM_SPECS.MD`) lay out the two conventions found in the wild:
+Travailler sur ces nouvelles ROMs de test met en lumière quelque chose qui
+mérite d'être documenté une bonne fois pour toutes et réutilisé : toutes
+les ROMs de test de style Blargg ne rapportent pas leurs résultats de la
+même manière. Les propres notes de ce projet (`TEST_ROM_SPECS.MD`)
+exposent les deux conventions rencontrées en pratique :
 
-| Convention | Used by | How it reports |
+| Convention | Utilisée par | Comment les résultats sont rapportés |
 |---|---|---|
-| Old (`shell.inc`) | `cpu_instrs`, `instr_timing`, `mem_timing` | Writes each result character to the **serial port** (Chapter 4), ends in an infinite self-loop |
-| New | `mem_timing-2`, `dmg_sound`, `oam_bug`, `halt_bug` | Writes a status byte + a fixed signature (`DE B0 61`) + result text directly into **external RAM** at `0xA000`, ends in an infinite self-loop |
+| Ancienne (`shell.inc`) | `cpu_instrs`, `instr_timing`, `mem_timing` | Écrit chaque caractère de résultat sur le **port série** (Chapitre 4), se termine par une boucle infinie sur elle-même |
+| Nouvelle | `mem_timing-2`, `dmg_sound`, `oam_bug`, `halt_bug` | Écrit un octet de statut + une signature fixe (`DE B0 61`) + le texte de résultat directement dans la **RAM externe** à `0xA000`, se termine par une boucle infinie sur elle-même |
 
 ```text
 $A000     = status (0x80 = running, 0x00 = passed, anything else = error code)
@@ -85,29 +93,32 @@ $A001-03  = signature DE B0 61
 $A004+    = result text (null-terminated)
 ```
 
-Both conventions end the same way: an infinite self-loop (`JP $`/`JR $`,
-i.e. a jump instruction whose target is itself). That's actually the most
-reliable signal of "this test ROM is done" — if `PC` stops changing
-between iterations of the main loop, nothing is going to happen that
-you haven't already observed, so it's safe to stop and check results.
-This is exactly the technique `CrabbyBoy`'s test harness (Chapter 9, and
-expanded on in Chapter 11) already leans on.
+Les deux conventions se terminent de la même manière : une boucle infinie
+sur elle-même (`JP $`/`JR $`, c'est-à-dire une instruction de saut dont la
+cible est elle-même). C'est en réalité le signal le plus fiable qu'« une
+ROM de test est terminée » — si `PC` cesse de changer entre les itérations
+de la boucle principale, rien ne va se produire que vous n'ayez déjà
+observé, donc il est sûr de s'arrêter et de vérifier les résultats. C'est
+exactement la technique sur laquelle s'appuie déjà le harnais de test de
+`CrabbyBoy` (Chapitre 9, et développée au Chapitre 11).
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Accurate, per-memory-access hardware ticking, instead of an
-  end-of-instruction lump sum.
-- Both serial-based and RAM-based test ROM result conventions understood
-  and documented.
-- A growing set of passing timing-sensitive test ROMs:
-  `instr_timing`, `mem_timing`, `mem_timing-2` (and its sub-tests:
-  read/write/modify timing).
+- Un avancement précis du hardware par accès mémoire, au lieu d'une somme
+  globale en fin d'instruction.
+- Les deux conventions de résultat de ROM de test, basées sur le port
+  série et sur la RAM, comprises et documentées.
+- Un nombre croissant de ROMs de test sensibles au timing qui réussissent :
+  `instr_timing`, `mem_timing`, `mem_timing-2` (et ses sous-tests : timing
+  de lecture/écriture/modification).
 
-## What's still missing
+## Ce qui manque encore
 
-- `oam_bug` and `dmg_sound` test ROMs are already known about (per
-  `TEST_ROM_SPECS.MD`) but not runnable yet — they need OAM/PPU behavior
-  and a real APU, respectively, neither of which exist yet at this point.
-- This is still "CPU and bus timing," not "PPU timing" — nothing is drawn
-  to a screen, and the PPU (Chapter 7) still only stores register bytes.
-  Both the PPU (Part V) and the APU (Part VI) still lie ahead.
+- Les ROMs de test `oam_bug` et `dmg_sound` sont déjà connues (d'après
+  `TEST_ROM_SPECS.MD`) mais pas encore exécutables — elles nécessitent
+  respectivement un comportement OAM/PPU et une vraie APU, qui n'existent
+  pas encore à ce stade.
+- Il s'agit encore ici de « timing du CPU et du bus », pas de « timing du
+  PPU » — rien n'est encore affiché à l'écran, et le PPU (Chapitre 7) ne
+  fait encore que stocker des octets de registre. Le PPU (Partie V) et
+  l'APU (Partie VI) restent tous deux à venir.

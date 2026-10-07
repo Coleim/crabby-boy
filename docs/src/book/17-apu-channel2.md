@@ -1,10 +1,10 @@
-# 17. Channel 2 — The Simpler Square Wave
+# 17. Canal 2 — L'onde carrée la plus simple
 
-Channel 2 (`a10eb95`) is, by design, almost nothing new to build: it's
-"channel 1 minus the sweep feature." This chapter is short on purpose —
-the real lesson is in the design decision, not in new code.
+Le canal 2 (`a10eb95`) n'apporte, par conception, presque rien de nouveau à construire :
+c'est « le canal 1 sans la fonctionnalité de sweep (sweep) ». Ce chapitre est court volontairement —
+la vraie leçon se trouve dans la décision de conception, pas dans du nouveau code.
 
-## Reusing the exact same `Channel` struct
+## Réutiliser exactement la même structure `Channel`
 
 ```rust
 // src/audio/apu.rs
@@ -16,43 +16,43 @@ pub struct APU {
 }
 ```
 
-Both fields have the same type. Channel 2 simply never calls
-`write_sweep`, never has anything clock its (unused) sweep fields, and
-its own register-writing methods (`write_nr1`/`write_nr2`/etc., shared
-with channel 1 via the same `impl Channel` block from Chapter 16) just
-happen to be all it needs.
+Les deux champs ont le même type. Le canal 2 n'appelle simplement jamais
+`write_sweep`, rien ne cadence jamais ses champs de sweep (inutilisés), et
+ses propres méthodes d'écriture de registres (`write_nr1`/`write_nr2`/etc., partagées
+avec le canal 1 via le même bloc `impl Channel` du chapitre 16) sont
+tout ce dont il a besoin.
 
-## Where the real differences live: in `IOBridge`'s address routing
+## Où se trouvent les vraies différences : le routage d'adresses d'`IOBridge`
 
-The actual difference between the two channels isn't in any channel
-logic at all — it's purely in which I/O addresses route to which
-channel instance:
+La différence réelle entre les deux canaux ne se trouve pas du tout dans la
+logique de canal — elle réside purement dans quelles adresses d'E/S sont routées
+vers quelle instance de canal :
 
 ```rust
 // channel 1 registers: NR10-NR14, conventionally 0xFF10-0xFF14
 // channel 2 registers: NR21-NR24, conventionally 0xFF16-0xFF19 (no NR20 sweep register — skipped on purpose)
 ```
 
-This is worth noticing as a general pattern: sometimes the most faithful
-way to represent "feature X doesn't exist on this variant" isn't a
-conditional flag somewhere in shared logic — it's simply *never wiring up
-the register address that would control it* in the first place. Channel
-2's hardware has no sweep register at all; our code mirrors that by
-having no code path that would ever call `write_sweep` on channel 2's
-`Channel` instance, rather than, say, a boolean flag like
-`has_sweep: bool` that every method would need to check.
+Cela vaut la peine d'être noté comme un modèle général : parfois, la façon la plus
+fidèle de représenter « la fonctionnalité X n'existe pas sur cette variante » n'est pas
+un drapeau (flag) conditionnel quelque part dans la logique partagée — c'est simplement
+*ne jamais câbler l'adresse de registre* qui la contrôlerait. Le matériel
+du canal 2 n'a tout simplement aucun registre de sweep ; notre code reflète cela
+en n'ayant aucun chemin de code qui appellerait jamais `write_sweep` sur l'instance
+`Channel` du canal 2, plutôt que, disons, un drapeau booléen comme
+`has_sweep: bool` que chaque méthode devrait vérifier.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Both square-wave channels (1 and 2) producing a duty-cycle waveform
-  with envelope and length-counter support, sharing one implementation.
-- A clean illustration of how much of the Game Boy's apparent complexity
-  (4 "different" channels) is really a small number of shared building
-  blocks (duty-cycle generator, envelope, length counter, sweep)
-  recombined in slightly different ways per channel.
+- Les deux canaux d'onde carrée (1 et 2) produisant une forme d'onde en duty cycle
+  avec support de l'enveloppe et du compteur de longueur, partageant une seule implémentation.
+- Une illustration nette de la mesure dans laquelle la complexité apparente de la Game Boy
+  (4 canaux « différents ») repose en réalité sur un petit nombre de blocs de
+  construction partagés (générateur de duty cycle, enveloppe, compteur de longueur, sweep)
+  recombinés de façons légèrement différentes selon le canal.
 
-## What's still missing
+## Ce qu'il manque encore
 
-- Channel 3 (arbitrary waveform, not duty-cycle-based) and channel 4
-  (noise, not periodic at all) genuinely do need their own distinct
-  implementations — covered next.
+- Le canal 3 (forme d'onde arbitraire, pas basée sur un duty cycle) et le canal 4
+  (bruit, pas périodique du tout) ont vraiment besoin de leurs propres
+  implémentations distinctes — couvert dans la suite.

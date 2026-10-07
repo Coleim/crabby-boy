@@ -1,12 +1,12 @@
-# 16. Channel 1 — Square Wave with Sweep
+# 16. Canal 1 — Onde carrée avec sweep
 
-Channel 1 is the first channel to get real behavior (`a8e1bcf`, `be5f728`,
-`ff84e29`, `36dd81a`), and it's the most feature-complete of the two
-square-wave channels: on top of the duty cycle and envelope every square
-channel has, channel 1 alone also supports **frequency sweep** — a
-smooth pitch slide, the classic "pew!" laser-sound-effect feature.
+Le canal 1 est le premier canal à recevoir un comportement réel (`a8e1bcf`, `be5f728`,
+`ff84e29`, `36dd81a`), et c'est le plus complet des deux canaux
+d'onde carrée : en plus du duty cycle et de l'enveloppe (envelope) que possède chaque canal
+carré, le canal 1 est le seul à supporter aussi le **sweep de fréquence** — un
+glissement de hauteur fluide, le classique effet sonore laser « pew! ».
 
-## The shared `Channel` struct
+## La structure partagée `Channel`
 
 ```rust
 // src/audio/channel.rs
@@ -36,17 +36,18 @@ pub struct Channel {
 }
 ```
 
-Reusing one struct for both square channels (channel 2 simply never
-triggers the sweep-related fields) avoids duplicating duty-cycle and
-envelope logic — a reasonable tradeoff of "slightly unused fields on
-channel 2" versus "two near-identical structs to keep in sync."
+Réutiliser une seule structure pour les deux canaux carrés (le canal 2 ne
+déclenche simplement jamais les champs liés au sweep) évite de dupliquer la
+logique du duty cycle et de l'enveloppe — un compromis raisonnable entre « quelques
+champs inutilisés sur le canal 2 » et « deux structures quasi identiques à maintenir
+synchronisées. »
 
-## Parsing the NRx registers
+## Parser les registres NRx
 
-Each channel is controlled by a small handful of dedicated registers
-(named `NR1x` for channel 1, `NR2x` for channel 2, etc. in Game Boy
-documentation). Parsing them is mostly bit-field extraction, the same
-skill from Chapter 4's `0xCB`-prefixed opcode decoding:
+Chaque canal est contrôlé par une petite poignée de registres dédiés
+(nommés `NR1x` pour le canal 1, `NR2x` pour le canal 2, etc. dans la
+documentation Game Boy). Les parser revient surtout à extraire des champs de bits,
+la même compétence que pour le décodage des opcodes préfixés `0xCB` du chapitre 4 :
 
 ```rust
 pub fn write_nr1(&mut self, val: u8) {
@@ -76,16 +77,16 @@ pub fn write_sweep(&mut self, val: u8) {
 }
 ```
 
-That last quirk in `write_sweep` is a good example of something you'll
-run into constantly writing a faithful emulator: documented, deliberate
-hardware edge cases that look like bugs, verified against test ROMs
-(Chapter 20) rather than derived from first principles. Nobody designs a
-feature where "changing a setting back can silently turn off the whole
-channel" on purpose from a product perspective — but real silicon does
-exactly this, games may rely on it (intentionally or not), and an
-accurate emulator has to reproduce it.
+Cette dernière bizarrerie dans `write_sweep` est un bon exemple de quelque chose
+que l'on rencontre constamment en écrivant un émulateur fidèle : des cas limites
+(edge cases) matériels documentés et délibérés qui ressemblent à des bugs, vérifiés
+par rapport à des ROMs de test (chapitre 20) plutôt que dérivés de premiers principes.
+Personne ne conçoit volontairement, d'un point de vue produit, une fonctionnalité où
+« changer un réglage pour revenir à l'état précédent peut couper silencieusement tout le
+canal » — mais c'est exactement ce que fait le vrai silicium, les jeux peuvent s'appuyer
+dessus (intentionnellement ou non), et un émulateur précis doit le reproduire.
 
-## Sweep: computing the next frequency
+## Sweep : calculer la prochaine fréquence
 
 ```rust
 pub fn sweep_next_period_and_overflow(&self) -> (u16, bool) {
@@ -99,27 +100,27 @@ pub fn sweep_next_period_and_overflow(&self) -> (u16, bool) {
 }
 ```
 
-Each sweep step (clocked by the frame sequencer from Chapter 15, at 128
-Hz), the channel's frequency ("period," here) shifts up or down by a
-fraction of its current value (`>> sweep_step` — a bigger shift value
-means a smaller fractional change, hence a slower sweep). `0x7FF`
-(2047) is the largest value the period register can hold; sweeping
-past it means the frequency has gone out of representable range, which
-silently disables the channel (`calculate_new_period(sweep) > 2047` in
-the earlier design notes in `APU.MD.md`, implemented here as the
-`overflow` boolean this function returns).
+À chaque étape de sweep (cadencée par le séquenceur de trame (frame) du chapitre 15, à 128
+Hz), la fréquence du canal (« period », ici) monte ou descend d'une
+fraction de sa valeur actuelle (`>> sweep_step` — une valeur de décalage plus grande
+signifie un changement fractionnel plus petit, donc un sweep plus lent). `0x7FF`
+(2047) est la plus grande valeur que le registre de période peut contenir ; dépasser
+cette valeur par sweep signifie que la fréquence est sortie de la plage représentable, ce qui
+désactive silencieusement le canal (`calculate_new_period(sweep) > 2047` dans
+les notes de conception initiales de `APU.MD.md`, implémenté ici comme le
+booléen `overflow` que cette fonction renvoie).
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Channel 1's register parsing: duty cycle, length, envelope, and sweep.
-- Real sweep computation, including the overflow-disables-channel and
-  mode-switch-disables-channel quirks.
-- The shared `Channel` struct, ready to be reused as-is for channel 2.
+- Le parsing des registres du canal 1 : duty cycle, longueur, enveloppe et sweep.
+- Un véritable calcul de sweep, incluant les bizarreries « dépassement désactive le
+  canal » et « changement de mode désactive le canal ».
+- La structure `Channel` partagée, prête à être réutilisée telle quelle pour le canal 2.
 
-## What's still missing
+## Ce qu'il manque encore
 
-- Channel 2 itself isn't wired up yet (next chapter — it reuses
-  everything built here).
-- No audible verification yet beyond informal listening (`be5f728`,
-  "BIP sound," was literally the first audible beep) — formal test-ROM
-  validation is Chapter 20.
+- Le canal 2 lui-même n'est pas encore câblé (prochain chapitre — il réutilise
+  tout ce qui a été construit ici).
+- Aucune vérification audible pour l'instant au-delà de l'écoute informelle (`be5f728`,
+  « BIP sound », était littéralement le premier bip audible) — la validation
+  formelle par ROMs de test fait l'objet du chapitre 20.

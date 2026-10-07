@@ -1,13 +1,14 @@
-# 15. APU Architecture & the `audio/` Module
+# 15. Architecture de l'APU & le module `audio/`
 
-With the CPU, bus, timer, and a first PPU all in reasonable shape, this
-part of the project's history (`7d79a24` onward) turns to sound. Sound
-and graphics are genuinely independent subsystems — this is why, in the
-project's real history, APU work happens *after* the minimal PPU
-(Chapter 12) rather than after a complete one: nothing about generating
-audio depends on pixels being drawn.
+Avec le CPU, le bus, le timer, et un premier PPU tous en état raisonnable,
+cette partie de l'histoire du projet (`7d79a24` et au-delà) se tourne
+vers le son. Le son et le graphisme sont des sous-systèmes véritablement
+indépendants — c'est pourquoi, dans l'histoire réelle du projet, le
+travail sur l'APU a lieu *après* le PPU minimal (Chapitre 12) plutôt
+qu'après un PPU complet : rien dans la génération audio ne dépend du fait
+que des pixels soient dessinés.
 
-## A dedicated `audio/` module
+## Un module `audio/` dédié
 
 ```text
 src/
@@ -20,11 +21,12 @@ src/
     noise_channel.rs — channel 4 (noise)
 ```
 
-`hardware/apu.rs` (Chapter 6) moves out into its own top-level module,
-with room for everything sound-related to live together, mirroring how
-`cpu/`, `bus/`, and `hardware/` were split out earlier (Chapter 6).
+`hardware/apu.rs` (Chapitre 6) migre vers son propre module de premier
+niveau, avec de la place pour que tout ce qui concerne le son vive
+ensemble, à l'image de la façon dont `cpu/`, `bus/` et `hardware/` avaient
+été séparés plus tôt (Chapitre 6).
 
-## Four channels, one mixer
+## Quatre canaux, un mixeur
 
 ```rust
 // src/audio/apu.rs
@@ -44,19 +46,22 @@ pub struct APU {
 }
 ```
 
-Exactly matching Chapter 0's quick mention: 4 independent sound
-generators running in parallel, combined down to a final signal. Channels
-1 and 2 share one `Channel` struct (channel 2 is simply channel 1 without
-the sweep feature) — reusing the same struct avoids duplicating duty-cycle
-and envelope logic twice.
+Correspondant exactement à la brève mention du Chapitre 0 : 4 générateurs
+de son indépendants fonctionnant en parallèle, combinés en un signal
+final. Les canaux 1 et 2 partagent une structure `Channel` (le canal 2
+n'est simplement le canal 1 sans la fonctionnalité de sweep) — réutiliser
+la même structure évite de dupliquer deux fois la logique de duty cycle
+et d'enveloppe (envelope).
 
-## The frame sequencer: one shared clock for all channels' "slow" features
+## Le séquenceur de trame : une horloge partagée pour toutes les fonctionnalités "lentes" des canaux
 
-Each channel has its own fast audio-generation clock (producing the
-actual waveform), but several *slower* features — envelope (volume
-fading), sweep (frequency sliding, channel 1 only), and length counters
-(auto-muting a channel after a set duration) — are all driven off one
-shared 512 Hz clock, derived from the main CPU clock:
+Chaque canal possède sa propre horloge rapide de génération audio
+(produisant la forme d'onde réelle), mais plusieurs fonctionnalités plus
+*lentes* — l'enveloppe (fondu du volume), le sweep (glissement de
+fréquence, canal 1 uniquement), et les compteurs de longueur
+(mise en sourdine automatique d'un canal après une durée définie) — sont
+toutes pilotées par une seule horloge partagée à 512 Hz, dérivée de
+l'horloge principale du CPU :
 
 ```rust
 pub fn tick(&mut self) {
@@ -86,16 +91,17 @@ pub fn tick(&mut self) {
 }
 ```
 
-`div_apu_counter` reaching 8192 CPU cycles is exactly 512 Hz (4,194,304
-Hz ÷ 8192 = 512). `frame_seq_step` then cycles through 8 steps (0-7), and
-different features are clocked on different steps — length counters
-every other step (256 Hz), sweep every 4th step (128 Hz), envelope once
-per full cycle (64 Hz). This single shared "frame sequencer" is exactly
-how real Game Boy hardware times these features, and is worth
-remembering as a named concept if you read further hardware
-documentation.
+`div_apu_counter` atteignant 8192 cycles CPU correspond exactement à
+512 Hz (4 194 304 Hz ÷ 8192 = 512). `frame_seq_step` parcourt ensuite 8
+étapes (0-7), et différentes fonctionnalités sont cadencées à des étapes
+différentes — les compteurs de longueur une étape sur deux (256 Hz), le
+sweep tous les 4 pas (128 Hz), l'enveloppe une fois par cycle complet
+(64 Hz). Ce "séquenceur de trame" unique et partagé est exactement la
+manière dont le vrai hardware Game Boy cadence ces fonctionnalités, et
+vaut la peine d'être retenu comme un concept nommé si vous lisez d'autres
+documentations matérielles.
 
-## Duty cycles: what makes a "square wave" have a shape
+## Les duty cycles : ce qui donne une forme à une "onde carrée"
 
 ```rust
 const DUTY_TABLE: [[u8; 8]; 4] = [
@@ -106,17 +112,18 @@ const DUTY_TABLE: [[u8; 8]; 4] = [
 ];
 ```
 
-A "square wave" isn't just one fixed shape — it's a repeating pattern of
-high/low values, and *what fraction of each cycle is "high"* (the
-**duty cycle**) changes its timbre, even at the same pitch. These 4 rows
-are the 4 fixed patterns the real hardware supports, each one simply a
-fixed sequence of 8 bits repeated over and over at the channel's current
-frequency. Channel 1 and 2 (Chapter 16/17) both use this table; channel 3
-(Chapter 18) instead reads an arbitrary, game-supplied waveform; channel 4
-(Chapter 19) uses pseudo-random noise instead of any repeating shape at
-all.
+Une "onde carrée" n'est pas qu'une seule forme fixe — c'est un motif
+répétitif de valeurs haute/basse, et *quelle fraction de chaque cycle est
+"haute"* (le **duty cycle**) change son timbre, même à une même hauteur
+de son (pitch). Ces 4 lignes sont les 4 motifs fixes que le vrai hardware
+prend en charge, chacun étant simplement une séquence fixe de 8 bits
+répétée encore et encore à la fréquence courante du canal. Les canaux 1
+et 2 (Chapitre 16/17) utilisent tous deux cette table ; le canal 3
+(Chapitre 18) lit à la place une forme d'onde arbitraire fournie par le
+jeu ; le canal 4 (Chapitre 19) utilise un bruit pseudo-aléatoire au lieu
+de toute forme répétitive.
 
-## Getting samples out to real speakers: `cpal`
+## Faire sortir les échantillons vers de vrais haut-parleurs : `cpal`
 
 ```rust
 // src/audio/audio_output.rs
@@ -125,30 +132,35 @@ pub struct AudioOutput {
 }
 ```
 
-This is the one place in the whole project, so far, that depends on an
-external crate for something OS-specific: actually talking to the sound
-card. [`cpal`](https://docs.rs/cpal/latest/cpal/) is a cross-platform
-audio I/O crate — it finds an output device, picks a supported sample
-format/rate, and gives you a callback that gets asked for fresh samples
-whenever the OS needs more. The APU itself has no idea `cpal` exists: it
-just writes finished samples into an `AudioBuffer` (a thread-safe ring
-buffer), and `AudioOutput`'s callback reads from that same buffer
-whenever the sound card asks for more data. This separation matters: the
-APU runs in lockstep with CPU emulation speed, while the sound card
-demands samples on its own schedule — the ring buffer is what lets those
-two different timing worlds coexist safely across threads
-(`Arc<Mutex<AudioBuffer>>`).
+C'est le seul endroit de tout le projet, jusqu'ici, qui dépend d'une
+crate externe pour quelque chose de spécifique à l'OS : parler
+réellement à la carte son. [`cpal`](https://docs.rs/cpal/latest/cpal/)
+est une crate d'entrée/sortie audio multiplateforme — elle trouve un
+périphérique de sortie, choisit un format/une fréquence d'échantillonnage
+pris en charge, et fournit un callback auquel on demande de nouveaux
+échantillons chaque fois que l'OS en a besoin davantage. L'APU lui-même
+n'a aucune idée que `cpal` existe : il se contente d'écrire les
+échantillons terminés dans un `AudioBuffer` (un tampon circulaire
+(ring buffer) thread-safe), et le callback d'`AudioOutput` lit depuis ce
+même tampon chaque fois que la carte son en demande davantage. Cette
+séparation est importante : l'APU tourne au rythme de la vitesse
+d'émulation du CPU, tandis que la carte son exige des échantillons selon
+son propre calendrier — le tampon circulaire est ce qui permet à ces deux
+mondes de timing différents de coexister en toute sécurité entre les
+threads (`Arc<Mutex<AudioBuffer>>`).
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A dedicated `audio/` module, cleanly separated from CPU/bus/hardware.
-- The APU's frame sequencer, correctly timing envelope/sweep/length
-  features at their real hardware frequencies.
-- A first real connection to actual sound hardware via `cpal`.
+- Un module `audio/` dédié, proprement séparé du CPU/bus/hardware.
+- Le séquenceur de trame de l'APU, cadençant correctement les
+  fonctionnalités d'enveloppe/sweep/longueur à leurs fréquences
+  matérielles réelles.
+- Une première véritable connexion à un vrai matériel audio via `cpal`.
 
-## What's still missing
+## Ce qui manque encore
 
-- No individual channel is fully implemented yet — this chapter is the
-  shared scaffolding; Chapters 16-19 cover each channel in turn.
-- No actual sample generation/mixing happening yet in a way you could
-  meaningfully listen to.
+- Aucun canal individuel n'est encore entièrement implémenté — ce
+  chapitre est l'échafaudage partagé ; les Chapitres 16 à 19 couvrent
+  chaque canal à tour de rôle.
+- Aucune véritable génération/mixage d'échantillons ne se produit encore
+  d'une manière que vous pourriez réellement écouter.

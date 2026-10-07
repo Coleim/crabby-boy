@@ -1,32 +1,33 @@
-# 11. Test Infrastructure & Continuous Integration
+# 11. Infrastructure de test & Intégration Continue
 
-With a real automated test harness in place (Chapter 9) and a growing
-pile of test ROMs (Chapters 4, 5, 10), two things happen in parallel in
-this part of the project's history: the test conventions get written
-down properly, and a collaborator joins to wire up Continuous Integration
-(CI) — automatically building and testing the project on every push.
+Avec un véritable harnais de test automatisé en place (Chapitre 9) et une
+pile croissante de ROMs de test (Chapitres 4, 5, 10), deux choses se
+produisent en parallèle dans cette partie de l'histoire du projet : les
+conventions de test sont consignées correctement, et un collaborateur
+rejoint le projet pour mettre en place l'Intégration Continue
+(CI) — construisant et testant automatiquement le projet à chaque push.
 
-## Writing down the test ROM conventions
+## Consigner les conventions des ROMs de test
 
-Chapter 10 already introduced the two Blargg-style result conventions
-(serial text vs. memory signature). This gets formalized into
-`TEST_ROM_SPECS.MD`, summarized as one reference table:
+Le Chapitre 10 a déjà introduit les deux conventions de résultat de
+style Blargg (texte série vs. signature mémoire). Cela est désormais
+formalisé dans `TEST_ROM_SPECS.MD`, résumé en un tableau de référence :
 
-| Test | Serial (SB/$81) | Memory ($A000+) | CGB required | End of test |
+| Test | Série (SB/$81) | Mémoire ($A000+) | CGB requis | Fin de test |
 |---|:---:|:---:|:---:|---|
-| `cpu_instrs` | ✅ | ❌ | No | Serial "Passed" or self-loop |
-| `instr_timing` | ✅ | ❌ | No | Serial "Passed" or self-loop |
-| `mem_timing` | ✅ | ❌ | No | Serial "Passed" or self-loop |
-| `mem_timing-2` | ❌ | ✅ | No | Self-loop (`JP $`) |
-| `dmg_sound` | ❌ | ✅ | No | Self-loop (`JP $`) |
-| `halt_bug.gb` | ❌ | ✅ | No | Self-loop (`JR $`) |
+| `cpu_instrs` | ✅ | ❌ | Non | Série "Passed" ou boucle infinie |
+| `instr_timing` | ✅ | ❌ | Non | Série "Passed" ou boucle infinie |
+| `mem_timing` | ✅ | ❌ | Non | Série "Passed" ou boucle infinie |
+| `mem_timing-2` | ❌ | ✅ | Non | Boucle infinie (`JP $`) |
+| `dmg_sound` | ❌ | ✅ | Non | Boucle infinie (`JP $`) |
+| `halt_bug.gb` | ❌ | ✅ | Non | Boucle infinie (`JR $`) |
 
-Writing a table like this isn't busywork — it's what lets you add new
-test ROMs later (sound tests, OAM tests) by just checking "which row does
-this one match" instead of reverse-engineering its behavior from scratch
-every time.
+Écrire un tableau comme celui-ci n'est pas du travail inutile — c'est ce
+qui permet d'ajouter plus tard de nouvelles ROMs de test (tests son, tests
+OAM) en vérifiant simplement "quelle ligne correspond à celle-ci" plutôt
+que de refaire la rétro-ingénierie de son comportement à chaque fois.
 
-## Setting up CI: a GitHub Actions workflow
+## Mise en place de la CI : un workflow GitHub Actions
 
 ```yaml
 # .github/workflows/rust.yml
@@ -49,47 +50,53 @@ jobs:
       run: cargo test --verbose
 ```
 
-This is about as simple as CI gets: on every push or pull request, spin
-up a fresh Ubuntu machine, check out the code, build it, run `cargo
-test`. Because Chapter 9 already turned test ROMs into real `#[test]`
-functions, this "just works" — CI doesn't need to know anything about
-Game Boys, cartridges, or opcodes; it only needs to know how to run a
-Rust test suite.
+C'est à peu près aussi simple que possible pour une CI : à chaque push
+ou pull request, une machine Ubuntu fraîche est démarrée, le code est
+récupéré, construit, puis `cargo test` est lancé. Comme le Chapitre 9 a
+déjà transformé les ROMs de test en véritables fonctions `#[test]`, cela
+"fonctionne directement" — la CI n'a pas besoin de connaître quoi que ce
+soit sur les Game Boy, les cartouches ou les opcodes ; elle a seulement
+besoin de savoir comment exécuter une suite de tests Rust.
 
-## A real lesson: tests can be *too* slow for CI
+## Une vraie leçon : les tests peuvent être *trop* lents pour la CI
 
-The very first version of this workflow had its `cargo test` step
-**commented out**, with a note that building alone was enough for now.
-Why? Running the *entire* `cpu_instrs.gb` ROM (as opposed to its 11
-smaller individual sub-tests) takes a very large number of emulated CPU
-steps to finish — fine to run locally and wait, much less fine to run on
-every single CI push if it meaningfully slows down feedback. The eventual
-fix (`cea7aca`, "Activate all tests but too long all_cpu_instrs") was to
-enable *all* the fast, individual test ROMs, while explicitly leaving the
-one genuinely slow combined ROM test commented out:
+La toute première version de ce workflow avait son étape `cargo test`
+**mise en commentaire**, avec une note indiquant que la simple
+construction suffisait pour l'instant. Pourquoi ? Exécuter l'*intégralité*
+de la ROM `cpu_instrs.gb` (par opposition à ses 11 sous-tests individuels
+plus petits) nécessite un très grand nombre d'étapes CPU émulées pour se
+terminer — c'est bien d'exécuter cela localement et d'attendre, mais
+beaucoup moins pratique de le faire à chaque push CI si cela ralentit
+significativement le retour d'information. La correction finale
+(`cea7aca`, "Activate all tests but too long all_cpu_instrs") a consisté
+à activer *toutes* les ROMs de test individuelles rapides, tout en
+laissant explicitement en commentaire le seul test de ROM combinée
+réellement lent :
 
 ```rust
 // Too long
 // cpu_instr_test!(test_all_cpu_instrs, "./tests/cpu_instrs.gb");
 ```
 
-This is a reusable, general lesson for any project with a slow-but-
-valuable test: don't disable your whole test suite because of one slow
-member — isolate it, and keep the fast majority running on every commit.
+C'est une leçon réutilisable et générale pour tout projet ayant un test
+lent mais précieux : ne désactivez pas toute votre suite de tests à cause
+d'un seul membre lent — isolez-le, et gardez la majorité rapide active à
+chaque commit.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- `TEST_ROM_SPECS.MD`, documenting exactly how to interpret each family
-  of test ROM.
-- A working GitHub Actions pipeline, building and testing on every push
-  and pull request.
-- A deliberate, documented exception for the one test ROM too slow to
-  run on every CI push.
+- `TEST_ROM_SPECS.MD`, documentant exactement comment interpréter chaque
+  famille de ROM de test.
+- Un pipeline GitHub Actions fonctionnel, construisant et testant à
+  chaque push et pull request.
+- Une exception délibérée et documentée pour la seule ROM de test trop
+  lente pour tourner à chaque push CI.
 
-## What's still missing
+## Ce qui manque encore
 
-- No PPU-specific test ROMs yet (like `dmg-acid2`, a well-known PPU
-  rendering correctness test) — there's no real PPU rendering to test
-  against yet. That starts in the very next chapter.
-- No sound test ROMs passing yet either (`dmg_sound` is documented, not
-  yet runnable) — that's Part VI.
+- Pas encore de ROMs de test spécifiques au PPU (comme `dmg-acid2`, un
+  test de correction du rendu PPU bien connu) — il n'y a pas encore de
+  véritable rendu PPU à tester. Cela commence dans le tout prochain
+  chapitre.
+- Pas encore de ROMs de test son qui passent (`dmg_sound` est documenté,
+  mais pas encore exécutable) — ce sera la Partie VI.

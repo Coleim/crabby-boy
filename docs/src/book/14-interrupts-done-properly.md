@@ -1,12 +1,14 @@
-# 14. Interrupts Done Properly
+# 14. Les interruptions faites correctement
 
-With the Timer (Chapter 9) and the PPU's VBlank (Chapter 12) both now
-able to set bits in `IF`, it's finally time to implement what actually
-happens when an interrupt fires: **dispatch** — pausing whatever the CPU
-was doing and jumping to a fixed handler address. This chapter covers
-`5af7b4b` and the test-framework cleanup in `7e246c4`.
+Avec le Timer (Chapitre 9) et le VBlank du PPU (Chapitre 12) désormais
+tous deux capables de positionner des bits dans `IF`, il est enfin temps
+d'implémenter ce qui se passe réellement lorsqu'une interruption se
+déclenche : le **dispatch** — mettre en pause ce que le CPU était en
+train de faire et sauter vers une adresse de gestionnaire fixe. Ce
+chapitre couvre `5af7b4b` et le nettoyage du cadre de test dans
+`7e246c4`.
 
-## The dispatch logic
+## La logique de dispatch
 
 ```rust
 pub fn handle_interrupts(&mut self, bus: &mut Bus) {
@@ -47,62 +49,72 @@ pub fn handle_interrupts(&mut self, bus: &mut Bus) {
 }
 ```
 
-Step by step, matching the conceptual summary from Chapter 0:
+Étape par étape, en reprenant le résumé conceptuel du Chapitre 0 :
 
-1. **`IME` gate** — if the CPU-internal master switch is off, nothing
-   happens, no matter what's pending. This is also exactly the condition
-   the HALT bug (Chapters 5 and 13) cares about.
-2. **`IE & IF`** — only interrupts that are *both* individually enabled
-   (`IE`, `0xFFFF`) *and* currently pending (`IF`, `0xFF0F`) count.
-3. **Priority via `trailing_zeros()`** — if multiple interrupt bits are
-   set simultaneously, the Game Boy always services the **lowest-numbered
-   bit first** (VBlank beats LCD STAT beats Timer beats Serial beats
-   Joypad). `u8::trailing_zeros()` is a neat one-liner for "index of the
-   lowest set bit" — exactly the priority order needed, for free.
-4. **Clear that one `IF` bit**, and **clear `IME`** — while handling this
-   interrupt, no other interrupt (not even a higher-priority one) can
-   dispatch on top of it, until the handler explicitly re-enables
-   interrupts (typically by ending with the `RETI` instruction from
-   Chapter 4, which restores `IME`).
-5. **Push `PC` onto the stack** — exactly like the `CALL` instruction
-   does, so that once the handler finishes, it can resume exactly where
-   normal execution left off.
-6. **Jump to a fixed vector address** — each interrupt type has one
-   fixed, hardcoded entry point (`0x0040` for VBlank, and so on);
-   there's no decoding involved, these addresses are a hardware constant,
-   the same way `0x0100` is always the cartridge entry point (Chapter 3).
+1. **Le verrou `IME`** — si l'interrupteur maître interne au CPU est
+   désactivé, rien ne se passe, peu importe ce qui est en attente. C'est
+   aussi exactement la condition dont se préoccupe le bug HALT (Chapitres
+   5 et 13).
+2. **`IE & IF`** — seules les interruptions qui sont *à la fois*
+   individuellement activées (`IE`, `0xFFFF`) *et* actuellement en
+   attente (`IF`, `0xFF0F`) comptent.
+3. **Priorité via `trailing_zeros()`** — si plusieurs bits d'interruption
+   sont positionnés simultanément, la Game Boy traite toujours en
+   premier le **bit numéroté le plus bas** (VBlank passe avant LCD STAT,
+   qui passe avant Timer, qui passe avant Serial, qui passe avant
+   Joypad). `u8::trailing_zeros()` est une astuce élégante en une ligne
+   pour obtenir "l'index du bit positionné le plus bas" — exactement
+   l'ordre de priorité requis, gratuitement.
+4. **Effacer ce bit d'`IF`**, et **effacer `IME`** — pendant la gestion
+   de cette interruption, aucune autre interruption (même de priorité
+   supérieure) ne peut se déclencher par-dessus, jusqu'à ce que le
+   gestionnaire réactive explicitement les interruptions (typiquement en
+   se terminant par l'instruction `RETI` du Chapitre 4, qui restaure
+   `IME`).
+5. **Empiler `PC`** — exactement comme le fait l'instruction `CALL`, afin
+   qu'une fois le gestionnaire terminé, l'exécution normale puisse
+   reprendre exactement là où elle s'était arrêtée.
+6. **Sauter vers une adresse de vecteur fixe** — chaque type
+   d'interruption possède un point d'entrée fixe et codé en dur (`0x0040`
+   pour VBlank, et ainsi de suite) ; il n'y a aucun décodage impliqué,
+   ces adresses sont une constante matérielle, de la même manière que
+   `0x0100` est toujours le point d'entrée de la cartouche (Chapitre 3).
 
-## Why the extra `bus.internal_tick()` calls matter
+## Pourquoi les appels supplémentaires à `bus.internal_tick()` comptent
 
-Notice the two internal ticks before pushing `PC`, and one more after.
-Dispatching an interrupt isn't instantaneous on real hardware — it takes
-a fixed number of cycles (5 M-cycles total, in this implementation's
-accounting: 2 "wait" cycles, 2 for pushing the 2-byte `PC` onto the stack
-—matching `write16bytes`'s own internal ticking from Chapter 10's
-per-access tick model — plus 1 more). Skipping these would make interrupt
-dispatch "free" in terms of timing, which would throw off any test ROM
-(like `interrupt_time.gb`, added in this very commit) checking exactly
-how many cycles pass around an interrupt firing.
+Remarquez les deux tics internes avant d'empiler `PC`, et un de plus
+après. Le dispatch d'une interruption n'est pas instantané sur le vrai
+hardware — il prend un nombre fixe de cycles (5 cycles M au total, dans
+la comptabilité de cette implémentation : 2 cycles "d'attente", 2 pour
+empiler les 2 octets de `PC` sur la pile — correspondant au propre tick
+interne de `write16bytes` issu du modèle de tick par accès du Chapitre
+10 — plus 1 de plus). Omettre ceux-ci rendrait le dispatch d'interruption
+"gratuit" en termes de timing, ce qui fausserait toute ROM de test (comme
+`interrupt_time.gb`, ajoutée dans ce même commit) vérifiant précisément
+combien de cycles s'écoulent autour du déclenchement d'une interruption.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Full interrupt dispatch: priority ordering, `IME`/`IE`/`IF` gating,
-  correct stack push, correct vector jump, correct cycle cost.
-- `interrupt_time.gb` added as a test ROM specifically to validate this
-  timing.
-- Both of this project's two interrupt sources so far (Timer, VBlank)
-  now actually *do something* when they fire, instead of just setting a
-  bit nobody reacts to.
+- Un dispatch d'interruption complet : ordonnancement par priorité,
+  verrouillage `IME`/`IE`/`IF`, empilement correct, saut de vecteur
+  correct, coût en cycles correct.
+- `interrupt_time.gb` ajoutée comme ROM de test spécifiquement pour
+  valider ce timing.
+- Les deux sources d'interruption du projet jusqu'ici (Timer, VBlank)
+  *font désormais réellement quelque chose* lorsqu'elles se déclenchent,
+  au lieu de simplement positionner un bit auquel personne ne réagit.
 
-## What's still missing
+## Ce qui manque encore
 
-- Only 2 of the 5 interrupt types (VBlank, Timer) have a real hardware
-  source behind them right now — Serial and Joypad interrupts exist as
-  vector addresses in this `match`, but nothing yet sets their `IF` bits.
-  The Joypad one gets wired up properly in Chapter 21.
-- LCD STAT interrupts specifically depend on PPU "mode" tracking, which
-  (per Chapter 12) doesn't exist yet.
-- This closes out Part IV. From here, the project's history branches into
-  largely independent subsystems built side by side: sound (Part VI, next),
-  input (Part VII), and a terminal UI (Part VIII) — before this book
-  circles back to the PPU one final time in Part IX.
+- Seuls 2 des 5 types d'interruption (VBlank, Timer) ont actuellement une
+  véritable source matérielle derrière eux — les interruptions Serial et
+  Joypad existent comme adresses de vecteur dans ce `match`, mais rien
+  ne positionne encore leurs bits `IF`. Celle de Joypad est câblée
+  correctement au Chapitre 21.
+- Les interruptions LCD STAT dépendent spécifiquement du suivi du "mode"
+  du PPU, qui (selon le Chapitre 12) n'existe pas encore.
+- Ceci clôture la Partie IV. À partir d'ici, l'histoire du projet se
+  ramifie en sous-systèmes largement indépendants construits côte à côte :
+  le son (Partie VI, suivant), les entrées (Partie VII), et une interface
+  terminal (Partie VIII) — avant que ce livre ne revienne une dernière
+  fois sur le PPU dans la Partie IX.

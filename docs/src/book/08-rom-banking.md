@@ -1,26 +1,30 @@
-# 8. ROM Banking
+# 8. Banking de ROM
 
-Chapter 2 parsed the cartridge's "cartridge type" byte but never acted on
-it. Here (`136bdd1`) is where that finally matters: supporting games
-bigger than what fits in the CPU's directly addressable range.
+Le Chapitre 2 a analysé l'octet « type de cartouche » mais n'a jamais agi
+en fonction de celui-ci. C'est ici (`136bdd1`) que cela devient enfin
+important : la prise en charge des jeux plus volumineux que ce qui tient
+dans la plage directement adressable par le CPU.
 
-## The problem: 32KB isn't enough
+## Le problème : 32 Ko ne suffisent pas
 
-The CPU can address `0x0000`–`0x7FFF` for ROM — that's 32KB. But plenty of
-real games (and `cpu_instrs.gb`, which we've been testing against this
-whole time) are bigger than that. The trick cartridge manufacturers used:
-put a small extra chip — a **Memory Bank Controller (MBC)** — on the
-cartridge itself, between the ROM chip and the console. This chip
-intercepts writes to certain addresses and uses them not as "store this
-byte in ROM" (you can't write to ROM, it's read-only hardware!) but as
-*commands*: "from now on, when the CPU reads from `0x4000`–`0x7FFF`, give
-it data from a different 16KB chunk of the much larger ROM instead."
+Le CPU peut adresser `0x0000`–`0x7FFF` pour la ROM — soit 32 Ko. Mais de
+nombreux jeux réels (et `cpu_instrs.gb`, celui que nous utilisons comme
+test depuis le début) sont plus volumineux que cela. L'astuce employée
+par les fabricants de cartouches : placer une petite puce supplémentaire —
+un **Memory Bank Controller (MBC)** — sur la cartouche elle-même, entre la
+puce de ROM et la console. Cette puce intercepte les écritures vers
+certaines adresses et les utilise non pas comme « stocker cet octet en
+ROM » (impossible d'écrire dans une ROM, c'est un hardware en lecture
+seule !) mais comme des *commandes* : « à partir de maintenant, quand le
+CPU lit depuis `0x4000`–`0x7FFF`, donne-lui plutôt des données provenant
+d'un autre bloc de 16 Ko de la ROM bien plus grande. »
 
-So `0x4000`–`0x7FFF` is a **switchable window**: its contents change
-depending on which "bank" (16KB chunk) was last selected, while
-`0x0000`–`0x3FFF` always shows the fixed first bank.
+Ainsi, `0x4000`–`0x7FFF` est une **fenêtre commutable (switchable
+window)** : son contenu change selon le « bank » (bloc de 16 Ko)
+sélectionné en dernier, tandis que `0x0000`–`0x3FFF` affiche toujours le
+premier bank fixe.
 
-## Reading through the active bank
+## Lire à travers le bank actif
 
 ```rust
 // src/bus/bus.rs
@@ -30,14 +34,16 @@ depending on which "bank" (16KB chunk) was last selected, while
 }
 ```
 
-`0x4000` is the size of one bank (16KB, matching the window size above).
-So: take the currently selected `bank_number`, multiply by the bank size
-to find where that bank starts in the full ROM `Vec<u8>`, then add the
-offset *within* the window the CPU is actually reading from. If
-`bank_number` is 2 and the CPU reads `0x4100`, this computes
-`2 * 0x4000 + (0x4100 - 0x4000) = 0x8100` in the real underlying ROM data.
+`0x4000` correspond à la taille d'un bank (16 Ko, cohérent avec la taille
+de la fenêtre mentionnée ci-dessus). Donc : on prend le `bank_number`
+actuellement sélectionné, on le multiplie par la taille d'un bank pour
+trouver où ce bank commence dans le `Vec<u8>` représentant la ROM
+complète, puis on ajoute le décalage *à l'intérieur* de la fenêtre que le
+CPU est en train de lire. Si `bank_number` vaut 2 et que le CPU lit
+`0x4100`, cela calcule `2 * 0x4000 + (0x4100 - 0x4000) = 0x8100` dans les
+données réelles sous-jacentes de la ROM.
 
-## Selecting a bank: writes to ROM aren't really writes
+## Sélectionner un bank : les écritures en ROM ne sont pas vraiment des écritures
 
 ```rust
 0x2000..=0x3FFF => {
@@ -49,23 +55,25 @@ offset *within* the window the CPU is actually reading from. If
 }
 ```
 
-This is the detail that trips people up the first time: the CPU is
-"writing to ROM," which sounds contradictory, but the MBC chip never
-actually stores that byte anywhere as data — it just *notices* the write
-happened and *reacts* to it by changing internal state (here,
-`bank_number`). From the game code's perspective, it looks exactly like
-writing to memory; in reality, every such "write" is intercepted and
-reinterpreted as a command. This `0x2000..=0x3FFF` match arm in
-`Bus::write` is where that interception happens.
+C'est le détail qui déroute la plupart des gens la première fois : le CPU
+« écrit en ROM », ce qui paraît contradictoire, mais la puce MBC ne stocke
+jamais réellement cet octet quelque part comme donnée — elle *remarque*
+simplement que l'écriture a eu lieu et *réagit* en changeant un état
+interne (ici, `bank_number`). Du point de vue du code du jeu, cela
+ressemble exactement à une écriture en mémoire ; en réalité, chaque
+« écriture » de ce type est interceptée et réinterprétée comme une
+commande. Ce bloc `0x2000..=0x3FFF` dans `Bus::write` est l'endroit où
+cette interception se produit.
 
-The `val & 0b0011111` masks the write down to 5 bits (this early MBC1-style
-implementation supports up to 32 banks that way), and the "if it's 0, make
-it 1" rule reflects a real MBC quirk: bank 0 is already always visible at
-`0x0000`–`0x3FFF`, so selecting "bank 0" for the switchable window would
-be redundant — hardware simply treats a request for bank 0 as a request
-for bank 1 instead.
+Le `val & 0b0011111` masque l'écriture à 5 bits (cette première
+implémentation de type MBC1 prend ainsi en charge jusqu'à 32 banks), et la
+règle « si c'est 0, mettre 1 » reflète une particularité (quirk) réelle du
+MBC : le bank 0 est déjà toujours visible à `0x0000`–`0x3FFF`, donc
+sélectionner le « bank 0 » pour la fenêtre commutable serait redondant —
+le hardware traite simplement une demande de bank 0 comme une demande de
+bank 1.
 
-## What's still a placeholder here
+## Ce qui reste un bouchon (stub) ici
 
 ```rust
 0x0000..=0x1FFF => {
@@ -77,16 +85,18 @@ for bank 1 instead.
 }
 ```
 
-Real MBC1 cartridges have more features than simple ROM bank selection:
-enabling/disabling external RAM (`0x0000`–`0x1FFF`) and a banking "mode"
-switch affecting how the upper address bits are interpreted
-(`0x6000`–`0x7FFF`). At this point they're acknowledged (so the game's
-writes don't silently vanish into the generic catch-all) but not acted
-upon — logged and left for later refinement, the same bootstrap technique
-from Chapter 6 (placeholder first, real behavior once it's actually
-needed).
+Les vraies cartouches MBC1 ont plus de fonctionnalités que la simple
+sélection de bank de ROM : l'activation/désactivation de la RAM externe
+(`0x0000`–`0x1FFF`) et un commutateur de « mode » de banking affectant la
+manière dont les bits d'adresse supérieurs sont interprétés
+(`0x6000`–`0x7FFF`). À ce stade, elles sont reconnues (de sorte que les
+écritures du jeu ne disparaissent pas silencieusement dans le filet
+générique) mais sans effet — elles sont journalisées (log) et laissées
+pour un affinement ultérieur, la même technique de bootstrap que celle du
+Chapitre 6 (bouchon d'abord, comportement réel une fois réellement
+nécessaire).
 
-## A small but important `STOP` fix, in passing
+## Une petite mais importante correction de `STOP`, en passant
 
 ```rust
 0x10 => {
@@ -95,28 +105,32 @@ needed).
 }
 ```
 
-`STOP` is a 2-byte instruction (opcode + one operand byte, conventionally
-always `0x00`), not 1 byte — this commit fixes `next_pc` to actually skip
-that operand byte. A good reminder: even deep into later chapters, you'll
-occasionally circle back and fix small mistakes from much earlier
-chapters, often while working on something unrelated (ROM banking, here).
-That's completely normal.
+`STOP` est une instruction de 2 octets (opcode + un octet d'opérande,
+conventionnellement toujours `0x00`), pas 1 octet — ce commit corrige
+`next_pc` pour qu'il saute effectivement cet octet d'opérande. Un bon
+rappel : même bien avancé dans les chapitres suivants, il vous arrivera de
+revenir en arrière corriger de petites erreurs provenant de chapitres bien
+antérieurs, souvent en travaillant sur quelque chose de totalement
+différent (le banking de ROM, ici). C'est tout à fait normal.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Working ROM bank switching, letting `cpu_instrs.gb` (and any other ROM
-  using this style of banking) load and run correctly beyond 32KB.
-- Acknowledged (if not yet implemented) RAM-enable and banking-mode
-  writes.
-- A corrected `STOP` instruction length.
+- Une commutation de bank de ROM fonctionnelle, permettant à
+  `cpu_instrs.gb` (et à toute autre ROM utilisant ce style de banking) de
+  se charger et de s'exécuter correctement au-delà de 32 Ko.
+- Des écritures d'activation de RAM et de mode de banking reconnues (même
+  si pas encore implémentées).
+- Une longueur d'instruction `STOP` corrigée.
 
-## What's still missing
+## Ce qui manque encore
 
-- No actual external RAM banking yet (`eram` exists as a flat array in
-  `Bus`, with no bank switching of its own).
-- Only one MBC "family" of behavior is modeled — real cartridges can use
-  several different MBC chip designs (MBC1, MBC3, MBC5, ...) with
-  different quirks; this project supports the common simple case needed
-  by its test ROMs, not every variant.
-- Still no interrupts firing from anywhere, no real timer-driven
-  interrupt, no PPU behavior — Part IV picks that up next.
+- Pas encore de véritable banking de RAM externe (`eram` existe comme un
+  tableau plat dans `Bus`, sans sa propre commutation de bank).
+- Une seule « famille » de comportement MBC est modélisée — les vraies
+  cartouches peuvent utiliser plusieurs puces MBC différentes (MBC1, MBC3,
+  MBC5, ...) avec des particularités différentes ; ce projet prend en
+  charge le cas simple courant nécessaire pour ses ROMs de test, pas
+  toutes les variantes.
+- Toujours aucune interruption (interrupt) déclenchée depuis où que ce
+  soit, pas de véritable interruption pilotée par le timer, pas de
+  comportement du PPU — la Partie IV s'en occupe ensuite.

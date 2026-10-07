@@ -1,26 +1,30 @@
-# 12. Scanlines 101 & a Minimal PPU
+# 12. Les scanlines 101 & un PPU minimal
 
-This is the chapter this whole book has been building toward (and,
-honestly, where a new companion guide picks up afterward — see Part IX).
-This commit (`624949c`) gives the `PPU` struct from Chapter 7 its first
-real behavior: counting time and firing an interrupt. Still **no pixels
-yet** — that's deliberate, and explained below.
+C'est le chapitre vers lequel tout ce livre a construit son chemin (et,
+honnêtement, là où un nouveau guide complémentaire prend le relais par la
+suite — voir la Partie IX). Ce commit (`624949c`) donne à la structure
+`PPU` du Chapitre 7 son premier véritable comportement : compter le temps
+et déclencher une interruption (interrupt). Toujours **pas de pixels pour
+l'instant** — c'est délibéré, et expliqué ci-dessous.
 
-## A reminder: how the real PPU spends its time
+## Un rappel : comment le véritable PPU passe son temps
 
-(If this feels new, Chapter 0 introduced the vocabulary — PPU, VRAM — at a
-glance; here's the timing model specifically.)
+(Si cela semble nouveau, le Chapitre 0 a introduit le vocabulaire — PPU,
+VRAM — en un coup d'œil ; voici maintenant spécifiquement le modèle de
+timing.)
 
-The screen is 160×144 pixels, drawn one line at a time, 60 times a
-second. A full frame takes exactly **70,224 "dots"** (the PPU's own clock
-unit, 4 dots per CPU M-cycle) — broken down as **154 scanlines × 456 dots
-each**. Of those 154 scanlines, only the first 144 are actually visible;
-the remaining 10 are a pause called **VBlank** (vertical blank), used
-historically to give old CRT displays time for their electron beam to
-physically return to the top-left corner, and used by Game Boy games as a
-safe window to update graphics data without tearing.
+L'écran fait 160×144 pixels, dessiné une ligne à la fois, 60 fois par
+seconde. Une trame (frame) complète prend exactement **70 224 "dots"**
+(l'unité d'horloge propre au PPU, 4 dots par cycle M du CPU) — répartis
+en **154 scanlines × 456 dots chacune**. Sur ces 154 scanlines, seules les
+144 premières sont réellement visibles ; les 10 restantes forment une
+pause appelée **VBlank** (blanc vertical), utilisée historiquement pour
+laisser aux anciens écrans CRT le temps de ramener physiquement leur
+faisceau d'électrons dans le coin supérieur gauche, et utilisée par les
+jeux Game Boy comme une fenêtre sûre pour mettre à jour les données
+graphiques sans déchirement d'image.
 
-## Counting dots, one tick at a time
+## Compter les dots, un tick à la fois
 
 ```rust
 // src/hardware/ppu.rs
@@ -49,18 +53,20 @@ pub fn tick(&mut self) -> bool {
 }
 ```
 
-Compare this directly to the Timer's `tick` from Chapter 9 — same shape,
-same idea: an internal counter advances every time this is called, and
-when it crosses a threshold (456 dots), something observable happens
-(here: `LY`, the current-scanline register from Chapter 7, increments).
-When `LY` reaches 144, that's the exact moment VBlank begins — and
-`tick` returns `true` to signal it, exactly once per frame.
+Comparez cela directement au `tick` du Timer au Chapitre 9 — même forme,
+même idée : un compteur interne avance à chaque appel de cette fonction,
+et lorsqu'il franchit un seuil (456 dots), quelque chose d'observable se
+produit (ici : `LY`, le registre de scanline courante du Chapitre 7,
+s'incrémente). Quand `LY` atteint 144, c'est exactement le moment où
+VBlank commence — et `tick` retourne `true` pour le signaler, exactement
+une fois par trame (frame).
 
-`self.dots += 4` matches how this function gets called: once per CPU
-M-cycle, each worth 4 dots — the same per-access ticking granularity
-Chapter 10 built for the timer, now driving the PPU too.
+`self.dots += 4` correspond à la manière dont cette fonction est appelée :
+une fois par cycle M du CPU, chacun valant 4 dots — la même granularité de
+tick par accès que celle construite au Chapitre 10 pour le timer,
+pilotant désormais aussi le PPU.
 
-## Wiring the VBlank interrupt
+## Câbler l'interruption VBlank
 
 ```rust
 // src/bus/iobridge.rs
@@ -75,14 +81,15 @@ pub fn tick(&mut self) {
 }
 ```
 
-The exact same pattern as the Timer interrupt from Chapter 9: `tick()`
-returns `true` exactly when something interrupt-worthy happened, and the
-caller OR's the matching bit into `interrupt_flag` (`IF`, `0xFF0F`).
-VBlank is interrupt bit 0 — the very first and, on real hardware, by far
-the most commonly used interrupt, since it's how games know it's safe to
-start the next frame's graphics updates.
+Exactement le même schéma que l'interruption du Timer au Chapitre 9 :
+`tick()` retourne `true` précisément quand quelque chose méritant une
+interruption s'est produit, et l'appelant fait un OU logique sur le bit
+correspondant dans `interrupt_flag` (`IF`, `0xFF0F`). VBlank est le bit
+d'interruption 0 — la toute première et, sur le vrai hardware, de loin la
+plus utilisée, car c'est ainsi que les jeux savent qu'il est sûr de
+commencer les mises à jour graphiques de la trame suivante.
 
-## Two small `IF`/`IE` correctness fixes, in passing
+## Deux petites corrections de justesse `IF`/`IE`, en passant
 
 ```rust
 0xFF0F => self.interrupt_flag | 0b1110_000, // on read: top 3 bits always read as 1
@@ -91,50 +98,54 @@ start the next frame's graphics updates.
 0xFF0F => self.interrupt_flag = val & 0b0001_1111, // on write: only the low 5 bits are real
 ```
 
-`IF` is only a 5-bit register in hardware terms (one bit per interrupt
-type: VBlank, STAT, Timer, Serial, Joypad) — the top 3 bits don't exist as
-real storage and always read back as `1`. Now that a *second* real
-interrupt source (VBlank) exists alongside the Timer, these details
-actually start to matter for test ROMs that inspect `IF` precisely, so
-they get tightened up here.
+`IF` n'est en termes matériels qu'un registre de 5 bits (un bit par type
+d'interruption : VBlank, STAT, Timer, Serial, Joypad) — les 3 bits de
+poids fort n'existent pas réellement en stockage et se lisent toujours
+comme `1`. Maintenant qu'une *seconde* véritable source d'interruption
+(VBlank) existe aux côtés du Timer, ces détails commencent réellement à
+compter pour les ROMs de test qui inspectent `IF` précisément, d'où leur
+resserrement ici.
 
-## Why no pixels yet — and that's genuinely fine
+## Pourquoi pas encore de pixels — et c'est tout à fait normal
 
-It would be reasonable to expect "the PPU chapter" to end with something
-appearing on a screen. This one doesn't, and that's an intentional,
-honest snapshot of how the project was actually built: get the *timing*
-skeleton right and provably correct first (dots → scanlines → VBlank →
-interrupt), *before* spending effort on tile decoding, scrolling, and
-palettes. A `PPU` that correctly ticks `LY` and fires `VBlank` on time is
-already enough to:
+Il serait raisonnable de s'attendre à ce que "le chapitre PPU" se termine
+avec quelque chose affiché à l'écran. Ce n'est pas le cas ici, et c'est un
+aperçu honnête et intentionnel de la façon dont le projet a réellement été
+construit : obtenir d'abord le squelette du *timing* correct et
+démontrablement juste (dots → scanlines → VBlank → interruption), *avant*
+de consacrer des efforts au décodage des tuiles, au défilement et aux
+palettes. Un `PPU` qui incrémente correctement `LY` et déclenche `VBlank`
+au bon moment suffit déjà à :
 
-- Let games progress past boot sequences that wait for VBlank before
-  continuing.
-- Give `halt_bug.gb` (Chapter 5) and `interrupt_time.gb` a real,
-  non-Timer interrupt source to test against, instead of only the
-  synthetic conditions used so far.
-- Provide a stable foundation (`dots`, `lcd_y_coord`, the register
-  layout) that later chapters build real rendering on top of, rather than
-  rewriting from scratch.
+- Permettre aux jeux de progresser au-delà des séquences de démarrage qui
+  attendent VBlank avant de continuer.
+- Donner à `halt_bug.gb` (Chapitre 5) et à `interrupt_time.gb` une
+  véritable source d'interruption non liée au Timer à tester, au lieu des
+  seules conditions synthétiques utilisées jusqu'ici.
+- Fournir une base stable (`dots`, `lcd_y_coord`, la disposition des
+  registres) sur laquelle les chapitres suivants construiront un véritable
+  rendu, plutôt que de tout réécrire depuis zéro.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A `PPU` that accurately tracks scanlines and dots, matching the real
-  70,224-dots-per-frame timing model.
-- A working VBlank interrupt, firing exactly once per frame at the right
-  moment.
-- Slightly more accurate `IE`/`IF` register read/write masking.
+- Un `PPU` qui suit précisément les scanlines et les dots, correspondant
+  au véritable modèle de timing de 70 224 dots par trame.
+- Une interruption VBlank fonctionnelle, se déclenchant exactement une
+  fois par trame au bon moment.
+- Un masquage de lecture/écriture légèrement plus précis des registres
+  `IE`/`IF`.
 
-## What's still missing
+## Ce qui manque encore
 
-- No STAT (`0xFF41`) mode tracking yet — real hardware exposes which of 4
-  PPU modes (OAM scan / drawing / HBlank / VBlank) is currently active,
-  and this isn't modeled at all yet.
-- No VRAM or OAM access from the PPU at all — it can't read tile data,
-  because it doesn't look at `vram`/`oam` (still owned by `Bus`) in any
-  way.
-- **No pixels, no framebuffer, no window, no sprites.** All of that is
-  deliberately deferred — Part IX revisits the PPU once more at the end of
-  this book, and the real pixel-rendering work (the pixel FIFO/fetcher
-  mechanism) is the subject of the separate
-  [PPU Background Rendering Guide](../ppu-background.md).
+- Pas encore de suivi du mode STAT (`0xFF41`) — le vrai hardware expose
+  lequel des 4 modes du PPU (balayage OAM / dessin / HBlank / VBlank) est
+  actuellement actif, et ceci n'est pas du tout modélisé pour l'instant.
+- Aucun accès VRAM ou OAM depuis le PPU — il ne peut pas lire les données
+  de tuiles, car il ne regarde en rien `vram`/`oam` (toujours détenus par
+  `Bus`).
+- **Pas de pixels, pas de tampon d'image (framebuffer), pas de fenêtre
+  (window), pas de sprites.** Tout cela est délibérément reporté — la
+  Partie IX revient une dernière fois sur le PPU à la fin de ce livre, et
+  le véritable travail de rendu de pixels (le mécanisme de pixel FIFO/
+  fetcher) fait l'objet du guide séparé
+  [Guide de rendu de l'arrière-plan du PPU](../ppu-background.md).

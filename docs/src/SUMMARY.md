@@ -1,56 +1,56 @@
-# Summary
+# Sommaire
 
 [Introduction](./README.md)
 
 # Guides
 
-- [PPU — Background Rendering Guide](./ppu-background.md)
+- [PPU — Guide du rendu de l'arrière-plan](./ppu-background.md)
 
-# Building a Game Boy Emulator in Rust
+# Construire un émulateur Game Boy en Rust
 
-- [0. What's Actually Inside a Game Boy](./book/00-orientation.md)
+- [0. Ce qu'il y a vraiment dans une Game Boy](./book/00-orientation.md)
 
-- [Part I — First Bytes]()
-  - [1. Project Setup & Loading a ROM](./book/01-project-setup.md)
-  - [2. Parsing the Cartridge Header](./book/02-cartridge-header.md)
+- [Partie I — Premiers octets]()
+  - [1. Mise en place du projet et chargement d'une ROM](./book/01-project-setup.md)
+  - [2. Analyse de l'en-tête de la cartouche](./book/02-cartridge-header.md)
 
-- [Part II — The Brain: Building the CPU]()
-  - [3. Registers, Flags, and Your First Opcode](./book/03-cpu-registers-first-opcode.md)
-  - [4. Growing the Instruction Set](./book/04-instruction-set.md)
-  - [5. The Halt Bug, Part 1](./book/05-halt-bug-part1.md)
+- [Partie II — Le cerveau : construire le CPU]()
+  - [3. Registres, flags et votre premier opcode](./book/03-cpu-registers-first-opcode.md)
+  - [4. Développer le jeu d'instructions](./book/04-instruction-set.md)
+  - [5. Le bug du halt, partie 1](./book/05-halt-bug-part1.md)
 
-- [Part III — Growing Up: Giving the Emulator a Real Architecture]()
-  - [6. Splitting into CPU / Bus / Hardware](./book/06-cpu-bus-hardware-split.md)
-  - [7. Filling In Missing Registers](./book/07-missing-registers-stubs.md)
-  - [8. ROM Banking](./book/08-rom-banking.md)
+- [Partie III — Grandir : donner à l'émulateur une véritable architecture]()
+  - [6. Séparer en CPU / Bus / Hardware](./book/06-cpu-bus-hardware-split.md)
+  - [7. Compléter les registres manquants](./book/07-missing-registers-stubs.md)
+  - [8. Le banking de ROM](./book/08-rom-banking.md)
 
-- [Part IV — Keeping Time]()
-  - [9. Timers](./book/09-timers.md)
-  - [10. Memory Timing Correctness](./book/10-memory-timing.md)
-  - [11. Test Infrastructure & CI](./book/11-testing-and-ci.md)
+- [Partie IV — Garder le temps]()
+  - [9. Les timers](./book/09-timers.md)
+  - [10. La justesse du timing mémoire](./book/10-memory-timing.md)
+  - [11. Infrastructure de tests et CI](./book/11-testing-and-ci.md)
 
-- [Part V — A First PPU Stub]()
-  - [12. Scanlines 101 & a Minimal PPU](./book/12-minimal-ppu.md)
-  - [13. The Halt Bug, Part 2](./book/13-halt-bug-part2.md)
-  - [14. Interrupts Done Properly](./book/14-interrupts-done-properly.md)
+- [Partie V — Une première ébauche de PPU]()
+  - [12. Les scanlines 101 et un PPU minimal](./book/12-minimal-ppu.md)
+  - [13. Le bug du halt, partie 2](./book/13-halt-bug-part2.md)
+  - [14. Les interruptions faites correctement](./book/14-interrupts-done-properly.md)
 
-- [Part VI — Sound: The APU]()
-  - [15. APU Architecture & the audio/ Module](./book/15-apu-architecture.md)
-  - [16. Channel 1 — Square Wave with Sweep](./book/16-apu-channel1.md)
-  - [17. Channel 2 — The Simpler Square Wave](./book/17-apu-channel2.md)
-  - [18. Channel 3 — Custom Wave](./book/18-apu-channel3.md)
-  - [19. Channel 4 — Noise](./book/19-apu-channel4.md)
-  - [20. Passing Blargg's dmg_sound Tests](./book/20-apu-passing-tests.md)
+- [Partie VI — Le son : l'APU]()
+  - [15. Architecture de l'APU et le module audio/](./book/15-apu-architecture.md)
+  - [16. Canal 1 — Onde carrée avec sweep](./book/16-apu-channel1.md)
+  - [17. Canal 2 — L'onde carrée la plus simple](./book/17-apu-channel2.md)
+  - [18. Canal 3 — Onde personnalisée](./book/18-apu-channel3.md)
+  - [19. Canal 4 — Bruit](./book/19-apu-channel4.md)
+  - [20. Réussir les tests dmg_sound de Blargg](./book/20-apu-passing-tests.md)
 
-- [Part VII — Input]()
-  - [21. The Joypad](./book/21-joypad.md)
+- [Partie VII — Les entrées]()
+  - [21. Le joypad](./book/21-joypad.md)
 
-- [Part VIII — Giving It a Face: Building a Terminal UI]()
-  - [22. A Detour That Didn't Stick](./book/22-detour-image-test.md)
-  - [23. Decoupling Emulation Speed from Display Refresh](./book/23-decoupling-tick-from-display.md)
-  - [24. A High-Pass Filter for Cleaner Audio](./book/24-audio-high-pass-filter.md)
-  - [25. Displaying CPU Registers and Cartridge Info](./book/25-terminal-ui-registers-header.md)
-  - [26. Visualizing VRAM](./book/26-vram-tile-viewer.md)
+- [Partie VIII — Lui donner un visage : construire une interface terminal]()
+  - [22. Un détour qui n'a pas tenu](./book/22-detour-image-test.md)
+  - [23. Découpler la vitesse d'émulation du rafraîchissement de l'affichage](./book/23-decoupling-tick-from-display.md)
+  - [24. Un filtre passe-haut pour un son plus propre](./book/24-audio-high-pass-filter.md)
+  - [25. Afficher les registres CPU et les infos de la cartouche](./book/25-terminal-ui-registers-header.md)
+  - [26. Visualiser la VRAM](./book/26-vram-tile-viewer.md)
 
-- [Part IX — Back to the PPU]()
-  - [27. Where We Left the PPU, and What's Next](./book/27-back-to-the-ppu.md)
+- [Partie IX — Retour au PPU]()
+  - [27. Où nous avons laissé le PPU, et ce qui vient ensuite](./book/27-back-to-the-ppu.md)

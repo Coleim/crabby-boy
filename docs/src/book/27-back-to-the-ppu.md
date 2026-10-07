@@ -1,77 +1,87 @@
-# 27. Where We Left the PPU, and What's Next
+# 27. Là où nous avons laissé le PPU, et la suite
 
-This closing chapter doesn't introduce a new commit — it's a deliberate
-pause to take stock, exactly where this book's subtitle promised it
-would stop: at the PPU, the one subsystem still earliest in its journey
-compared to everything else built so far.
+Ce chapitre de clôture n'introduit pas de nouveau commit — c'est une
+pause délibérée pour faire le point, exactement là où le sous-titre de
+ce livre promettait de s'arrêter : au PPU, le seul sous-système encore
+au tout début de son parcours comparé à tout ce qui a été construit
+jusqu'ici.
 
-## A quick recap of the whole journey
+## Un rapide récapitulatif de tout le parcours
 
-Looking back at the parts of this book:
+En regardant en arrière les parties de ce livre :
 
-- **Part I-II** gave us a CPU that can fetch, decode, and execute (almost)
-  every instruction in the Game Boy's instruction set, validated against
-  Blargg's `cpu_instrs.gb`.
-- **Part III** gave that CPU a real `Bus`/`IOBridge` architecture and ROM
-  banking, so bigger games can load at all.
-- **Part IV-V** added a Timer, full interrupt dispatch, and a first,
-  timing-accurate (but pixel-less) PPU stub — enough to correctly fire
-  VBlank once per frame, on schedule.
-- **Part VI** built a complete, 4-channel APU, verified against Blargg's
-  `dmg_sound` suite.
-- **Part VII-VIII** added a joypad stub, and a real terminal UI
-  architecture (decoupled from emulation speed), culminating in a live
-  CPU/header debug view and a raw VRAM tile decoder.
+- **Parties I-II** nous ont donné un CPU capable de récupérer (fetch),
+  décoder et exécuter (presque) chaque instruction du jeu d'instructions
+  de la Game Boy, validé par rapport au `cpu_instrs.gb` de Blargg.
+- **Partie III** a donné à ce CPU une véritable architecture `Bus`/
+  `IOBridge` et le bank switching (banking) de ROM, afin que des jeux
+  plus volumineux puissent même se charger.
+- **Parties IV-V** ont ajouté un Timer, la distribution complète des
+  interruptions, et un premier stub de PPU fidèle au timing (mais sans
+  pixels) — suffisant pour déclencher correctement VBlank une fois par
+  image (frame), au bon moment.
+- **Partie VI** a construit une APU complète à 4 canaux, vérifiée par
+  rapport à la suite `dmg_sound` de Blargg.
+- **Parties VII-VIII** ont ajouté un stub de joypad, et une véritable
+  architecture d'interface terminal (découplée de la vitesse
+  d'émulation), aboutissant à une vue de débogage CPU/en-tête en direct
+  et à un décodeur brut de tuiles VRAM.
 
-## What exists for the PPU specifically, right now
+## Ce qui existe pour le PPU spécifiquement, à l'heure actuelle
 
-Exactly two pieces, from two different chapters:
+Exactement deux éléments, issus de deux chapitres différents :
 
-1. **Chapter 12's minimal PPU**: accurate dot/scanline counting, `LY`
-   tracking, and a correctly-timed VBlank interrupt. No pixels, no STAT
-   modes, no VRAM access from the PPU itself.
-2. **Chapter 26's VRAM tile viewer**: correct 2-bits-per-pixel tile
-   decoding, displayed as a raw debug grid — but with no tile *map*, no
-   scrolling, no palette application, and entirely disconnected from the
-   PPU's own scanline timing.
+1. **Le PPU minimal du chapitre 12** : comptage fidèle des dots/scanlines,
+   suivi de `LY`, et une interruption VBlank correctement synchronisée.
+   Pas de pixels, pas de modes STAT, pas d'accès VRAM depuis le PPU
+   lui-même.
+2. **Le visualiseur de tuiles VRAM du chapitre 26** : décodage fidèle des
+   tuiles à 2 bits par pixel, affiché sous forme de grille de débogage
+   brute — mais sans tile map, sans défilement, sans application de
+   palette, et entièrement déconnecté du propre timing de scanline du
+   PPU.
 
-Between these two pieces, nearly all of the *raw ingredients* for real
-background rendering already exist somewhere in this codebase: accurate
-timing (Chapter 12) and accurate tile decoding (Chapter 26). What's
-missing is the thing that actually combines them into a real frame.
+Entre ces deux éléments, presque tous les *ingrédients bruts* pour un
+vrai rendu d'arrière-plan (background) existent déjà quelque part dans
+cette base de code : un timing fidèle (chapitre 12) et un décodage de
+tuiles fidèle (chapitre 26). Ce qui manque, c'est l'élément qui les
+combine réellement en une vraie image (frame).
 
-## What comes next: real background rendering
+## Ce qui vient ensuite : un vrai rendu d'arrière-plan
 
-That combination — reading the tile *map* (not just raw tile data),
-applying `SCX`/`SCY` scrolling, applying the real `BGP` palette, and
-doing all of this in sync with the PPU's actual per-dot timing using the
-real **pixel FIFO and fetcher** mechanism — is specifically the subject
-of the companion guide:
+Cette combinaison — lire la *tile map* (pas seulement les données de
+tuile brutes), appliquer le défilement `SCX`/`SCY`, appliquer la vraie
+palette `BGP`, et faire tout cela en synchronisation avec le timing réel
+par dot du PPU en utilisant le véritable mécanisme de **pixel FIFO et de
+fetcher** — est précisément le sujet du guide associé :
 
 ➡️ **[PPU — Background Rendering Guide](../ppu-background.md)**
 
-That guide picks up exactly where this book leaves off, written in the
-same "assume nothing, explain everything" style, and goes deep on:
+Ce guide reprend exactement là où ce livre s'arrête, écrit dans le même
+style "ne rien supposer, tout expliquer", et approfondit :
 
-- The 4 real PPU modes (OAM Scan, Drawing, HBlank, VBlank) and their
-  precise dot timing.
-- How tile maps, tile data, scrolling, and palettes combine to produce
-  one pixel.
-- The real pixel FIFO/fetcher state machine real hardware uses, built
-  deliberately (not as a shortcut), so window and sprite support can be
-  added later without a rewrite.
+- Les 4 vrais modes du PPU (OAM Scan, Drawing, HBlank, VBlank) et leur
+  timing précis par dot.
+- Comment les tile maps, les données de tuile, le défilement et les
+  palettes se combinent pour produire un pixel.
+- La véritable machine à états du pixel FIFO/fetcher utilisée par le
+  vrai matériel (hardware), construite délibérément (pas comme un
+  raccourci), afin que la prise en charge de la fenêtre (window) et des
+  sprites puisse être ajoutée plus tard sans réécriture.
 
-## Beyond that
+## Au-delà de cela
 
-Once real background rendering exists, the natural next steps (not yet
-written up anywhere at the time of this chapter, but clear from
-everything covered so far) are: the window layer (a cheap addition once
-the background fetcher exists, since it reuses the same mechanism), and
-sprites (a genuinely separate subsystem: a real OAM scan, a second FIFO,
-and pixel-priority mixing rules) — plus finishing the joypad (Chapter 21
-left real button-to-key mapping as explicitly unbuilt) and STAT-based
-interrupts (Chapter 14 left LCD STAT as a vector address with no real
-trigger yet).
+Une fois qu'un vrai rendu d'arrière-plan existe, les prochaines étapes
+naturelles (pas encore rédigées nulle part au moment de ce chapitre, mais
+claires au vu de tout ce qui a été couvert jusqu'ici) sont : la couche de
+fenêtre (window) (un ajout peu coûteux une fois que le fetcher
+d'arrière-plan existe, puisqu'il réutilise le même mécanisme), et les
+sprites (un sous-système véritablement séparé : un vrai OAM scan, un
+second FIFO, et des règles de mélange par priorité de pixel) — plus la
+finalisation du joypad (le chapitre 21 a laissé la véritable association
+bouton-touche explicitement non construite) et les interruptions basées
+sur STAT (le chapitre 14 a laissé le LCD STAT comme une adresse de
+vecteur sans déclencheur réel pour l'instant).
 
-This is, genuinely, where the project stands today. The rest gets written
-as it gets built.
+C'est, authentiquement, là où en est le projet aujourd'hui. Le reste
+s'écrira au fur et à mesure qu'il sera construit.

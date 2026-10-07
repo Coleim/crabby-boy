@@ -1,15 +1,16 @@
-# 22. A Detour That Didn't Stick
+# 22. Un détour qui n'a pas tenu
 
-This chapter is a little different: it's about a design that was tried
-(`d7c25fd`) and then abandoned just one commit later (Chapter 23). It's
-worth covering anyway — recognizing a dead end quickly is a normal, even
-healthy part of building something like this, and the attempt still
-taught useful things that carried forward.
+Ce chapitre est un peu différent : il parle d'une conception qui a été
+essayée (`d7c25fd`) puis abandonnée un seul commit plus tard
+(chapitre 23). Cela vaut quand même la peine d'en parler — reconnaître
+rapidement une impasse fait partie normale, voire saine, de la
+construction d'un projet comme celui-ci, et cette tentative a quand même
+appris des choses utiles qui ont été conservées par la suite.
 
-## The idea: render the Game Boy screen as an image, in the terminal
+## L'idée : rendre l'écran de la Game Boy sous forme d'image, dans le terminal
 
 ```rust
-// src/display_interface.rs (short-lived)
+// src/display_interface.rs (de courte durée)
 pub struct DisplayInterface {
     pub running: bool,
     image_state: RefCell<StatefulProtocol>,
@@ -25,17 +26,19 @@ impl DisplayInterface {
 }
 ```
 
-The crates here — [`ratatui`](https://ratatui.rs/) for building terminal
-UIs, and [`ratatui-image`](https://docs.rs/ratatui-image/) specifically
-for rendering real bitmap images inside a terminal (many modern
-terminals support protocols like Sixel or Kitty's image protocol that
-make this possible) — turned out to be exactly the right choice. The
-160×144 placeholder gradient image here is a stand-in for what will
-eventually be real PPU pixel output (the companion
-[PPU Background Rendering Guide](../ppu-background.md) is what finally
-produces real content for a widget just like this one).
+Les crates utilisées ici — [`ratatui`](https://ratatui.rs/) pour
+construire des interfaces terminal, et
+[`ratatui-image`](https://docs.rs/ratatui-image/) spécifiquement pour
+afficher de vraies images bitmap à l'intérieur d'un terminal (de nombreux
+terminaux modernes prennent en charge des protocoles comme Sixel ou le
+protocole d'image de Kitty qui rendent cela possible) — se sont avérées
+être exactement le bon choix. L'image en dégradé 160×144 utilisée ici
+comme placeholder remplace ce qui sera finalement la vraie sortie pixel
+du PPU (le guide associé
+[PPU Background Rendering Guide](../ppu-background.md) est ce qui produit
+finalement du vrai contenu pour un widget exactement comme celui-ci).
 
-## A small but interesting Rust pattern: `RefCell` for a `&self` render method
+## Un petit motif Rust intéressant : `RefCell` pour une méthode de rendu `&self`
 
 ```rust
 impl Widget for &DisplayInterface {
@@ -47,37 +50,43 @@ impl Widget for &DisplayInterface {
 }
 ```
 
-`ratatui`'s `Widget::render` only gives you `&self` (an immutable
-reference), but `ratatui-image`'s stateful image widget needs to mutate
-its internal protocol state every time it draws (e.g. to cache an
-encoded version of the image). `RefCell` is Rust's way of allowing
-*controlled, checked-at-runtime* mutation through a shared reference —
-exactly the tool for this mismatch. This detail survives into the final
-architecture even though the surrounding struct doesn't.
+La méthode `Widget::render` de `ratatui` ne donne accès qu'à `&self` (une
+référence immuable), mais le widget d'image à état de `ratatui-image` a
+besoin de muter son état interne de protocole à chaque rendu (par exemple
+pour mettre en cache une version encodée de l'image). `RefCell` est la
+manière de Rust de permettre une mutation *contrôlée, vérifiée à
+l'exécution* via une référence partagée — exactement l'outil adapté à
+cette inadéquation. Ce détail survit dans l'architecture finale même si
+la structure environnante, elle, ne survit pas.
 
-## Why this specific shape got abandoned
+## Pourquoi cette conception précise a été abandonnée
 
-The very next commit (`a3ec152`, Chapter 23) rewrites this entirely —
-not because `ratatui`/`ratatui-image` were the wrong tools (they weren't;
-they stick around), but because of a timing mismatch this design didn't
-yet account for: `DisplayInterface::update` expected to be driven once
-per emulated step, with no clear separation between "how fast the CPU
-emulation runs" and "how fast the screen redraws." A terminal UI
-realistically redraws at a much lower rate than the CPU executes
-instructions (dozens of times a second, at most, versus millions of CPU
-steps per second) — baking the display directly into the same loop as
-CPU execution, the way this first attempt implicitly did, doesn't scale
-well once you actually want a responsive UI alongside accurate emulation
-speed.
+Le commit suivant immédiat (`a3ec152`, chapitre 23) réécrit entièrement
+cela — pas parce que `ratatui`/`ratatui-image` étaient de mauvais outils
+(ils ne l'étaient pas ; ils restent utilisés), mais à cause d'un décalage
+temporel que cette conception ne prenait pas encore en compte :
+`DisplayInterface::update` était censé être piloté une fois par étape
+émulée, sans séparation claire entre "à quelle vitesse tourne l'émulation
+du CPU" et "à quelle vitesse l'écran se redessine". Une interface
+terminal se redessine en réalité à un taux bien plus bas que celui
+auquel le CPU exécute des instructions (au plus quelques dizaines de fois
+par seconde, contre des millions d'étapes CPU par seconde) — intégrer
+directement l'affichage dans la même boucle que l'exécution du CPU,
+comme le faisait implicitement cette première tentative, ne passe pas à
+l'échelle dès qu'on veut réellement une interface réactive en même temps
+qu'une vitesse d'émulation fidèle.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- Confirmation that `ratatui` + `ratatui-image` can render a real bitmap
-  image inside a terminal — a genuinely useful finding, carried forward.
-- A concrete example of over-coupling (display tightly bound to the
-  emulation loop) to recognize and avoid in the next design.
+- La confirmation que `ratatui` + `ratatui-image` peuvent afficher une
+  véritable image bitmap à l'intérieur d'un terminal — un constat
+  vraiment utile, conservé par la suite.
+- Un exemple concret de couplage excessif (affichage étroitement lié à
+  la boucle d'émulation) à reconnaître et à éviter dans la prochaine
+  conception.
 
-## What's still missing (and about to be redesigned)
+## Ce qui manque encore (et est sur le point d'être repensé)
 
-- No separation yet between "how fast the emulator ticks" and "how fast
-  the screen redraws" — that's exactly what Chapter 23 introduces.
+- Aucune séparation encore entre "à quelle vitesse l'émulateur avance
+  (tick)" et "à quelle vitesse l'écran se redessine" — c'est exactement
+  ce que le chapitre 23 introduit.

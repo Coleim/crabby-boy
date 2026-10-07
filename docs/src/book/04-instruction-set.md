@@ -1,20 +1,21 @@
-# 4. Growing the Instruction Set
+# 4. Étoffer le jeu d'instructions
 
-This chapter covers the longest, most repetitive stretch of the whole
-project: turning a handful of opcodes into (almost) all 512 of them (256
-"main" opcodes, plus 256 more behind a special `0xCB` prefix). It spans a
-long sequence of commits (`ab86d28` → `dc9a258`). Instead of walking every
-single opcode (that's what the
-[opcode tables](https://gbdev.io/gb-opcodes/optables/) are for), this
-chapter focuses on the handful of *ideas* that, once understood, make
-every individual opcode straightforward.
+Ce chapitre couvre la partie la plus longue et la plus répétitive de tout
+le projet : transformer une poignée d'opcodes en (presque) la totalité
+des 512 qui existent (256 opcodes « principaux », plus 256 autres
+derrière un préfixe spécial `0xCB`). Il s'étend sur une longue séquence
+de commits (`ab86d28` → `dc9a258`). Plutôt que de parcourir chaque opcode
+un par un (c'est à cela que servent les
+[tables d'opcodes](https://gbdev.io/gb-opcodes/optables/)), ce chapitre
+se concentre sur la poignée d'*idées* qui, une fois comprises, rendent
+chaque opcode individuel simple à aborder.
 
-## A first mid-grind reorganization: `Bus` is born
+## Une première réorganisation à mi-parcours : naissance du `Bus`
 
-Partway through adding opcodes, instructions started needing real memory
-regions (VRAM, WRAM, OAM, HRAM) instead of one flat array, so a `Bus`
-struct appears (`a6f2e4e`), already annotated with the full memory map
-from Chapter 0:
+En plein ajout d'opcodes, les instructions ont commencé à avoir besoin de
+vraies régions mémoire (VRAM, WRAM, OAM, HRAM) au lieu d'un seul tableau
+plat, donc une structure `Bus` apparaît (`a6f2e4e`), déjà annotée avec la
+carte mémoire complète du Chapitre 0 :
 
 ```rust
 // src/cpu/bus.rs
@@ -46,21 +47,23 @@ impl Bus {
 }
 ```
 
-Rust's `match` on a range (`0x8000..=0x9FFF => ...`) is doing exactly the
-job of the memory map table from Chapter 0 — each arm is one row of that
-table. From here on, `CPU::execute` takes a `&mut Bus` instead of a raw
-`&mut [u8]`, and every memory access goes through `bus.read`/`bus.write`
-instead of indexing an array directly. This one change is what makes
-later chapters possible (ROM banking, I/O registers, VRAM, OAM all need
-*different* behavior per address range, not just a different backing
-array).
+Le `match` de Rust sur une plage (`0x8000..=0x9FFF => ...`) fait
+exactement le travail de la table de carte mémoire du Chapitre 0 — chaque
+branche est une ligne de cette table. À partir d'ici, `CPU::execute`
+prend un `&mut Bus` au lieu d'une tranche brute `&mut [u8]`, et chaque
+accès mémoire passe par `bus.read`/`bus.write` plutôt que par l'indexation
+directe d'un tableau. Ce changement unique est ce qui rend possibles les
+chapitres suivants (le banking de ROM, les registres d'E/S, la VRAM,
+l'OAM ont tous besoin d'un comportement *différent* selon la plage
+d'adresses, pas simplement d'un tableau de stockage différent).
 
-## Idea 1: register pairs are just two registers glued together
+## Idée 1 : les paires de registres ne sont que deux registres collés ensemble
 
-Several instructions treat `B`+`C`, `D`+`E`, or `H`+`L` as one 16-bit
-value (e.g. `LD BC, nn`, `INC HL`). There's no new hardware concept here —
-it's the exact same little-endian combination trick from `read16bytes` in
-Chapter 3, just exposed as convenient getter/setter pairs:
+Plusieurs instructions traitent `B`+`C`, `D`+`E`, ou `H`+`L` comme une
+seule valeur 16 bits (par exemple `LD BC, nn`, `INC HL`). Il n'y a aucun
+nouveau concept hardware ici — c'est exactement le même tour de
+combinaison little-endian que celui de `read16bytes` au Chapitre 3,
+simplement exposé sous forme de paires de getter/setter pratiques :
 
 ```rust
 fn get_bc(&self) -> u16 {
@@ -72,30 +75,33 @@ fn set_bc(&mut self, value: u16) {
 }
 ```
 
-## Idea 2: flags, accessed through named helpers instead of raw bit math
+## Idée 2 : les flags, accessibles via des aides nommées plutôt que des opérations binaires brutes
 
-Writing `self.f |= 0x80` everywhere (Chapter 3) gets error-prone fast.
-By this point in the grind, flag access becomes small helper methods —
-`get_z`/`set_z`, `get_n`/`set_n`, `get_h`/`set_h`, `get_c`/`set_c` — so
-instruction bodies read like the spec, not like bit-twiddling:
+Écrire `self.f |= 0x80` partout (Chapitre 3) devient vite source
+d'erreurs. À ce stade de l'avancement, l'accès aux flags devient de
+petites méthodes d'aide — `get_z`/`set_z`, `get_n`/`set_n`, `get_h`/
+`set_h`, `get_c`/`set_c` — afin que le corps des instructions se lise
+comme la spécification, et non comme de la manipulation de bits :
 
 ```rust
 self.set_h(false);
 self.set_z(self.a == 0);
 ```
 
-If you implement your own CPU, write these helpers *before* you need
-them in the 20th instruction — it pays for itself almost immediately.
+Si vous implémentez votre propre CPU, écrivez ces aides *avant* d'en
+avoir besoin à la vingtième instruction — cela se rentabilise presque
+immédiatement.
 
-## Idea 3: the `0xCB` prefix is a second opcode table
+## Idée 3 : le préfixe `0xCB` est une seconde table d'opcodes
 
-If the byte at `PC` is `0xCB`, that byte doesn't mean an instruction by
-itself — it means "the *next* byte selects from a completely separate
-table of 256 bit-manipulation instructions" (rotates, shifts, and
-per-bit test/set/clear operations). Rather than writing 256 more
-`match` arms by hand, the actual CB-prefixed byte gets decoded by
-splitting it into 3 bit-fields, because the people who designed this CPU
-deliberately laid the opcode byte out that way:
+Si l'octet à `PC` est `0xCB`, cet octet ne représente pas une instruction
+à lui seul — il signifie « l'octet *suivant* sélectionne dans une table
+complètement séparée de 256 instructions de manipulation de bits »
+(rotations, décalages, et opérations de test/positionnement/effacement
+bit à bit). Plutôt que d'écrire 256 branches `match` de plus à la main,
+l'octet préfixé par CB est en réalité décodé en le divisant en 3 champs
+de bits, car les concepteurs de ce CPU ont délibérément disposé l'octet
+d'opcode de cette façon :
 
 ```rust
 let category: u8 = opcode >> 6;              // top 2 bits:   which family (rotate/shift, BIT, RES, SET)
@@ -121,17 +127,19 @@ match category {
 }
 ```
 
-This is a nice general lesson, not just a Game Boy one: when a spec's
-binary layout looks suspiciously tidy (exactly 2 + 3 + 3 bits, lining up
-with "8 operations × 8 registers," or "4 categories × 8 bit-numbers × 8
-registers"), it's almost always intentional, and decoding by shifting
-and masking beats writing out all 256 cases by hand.
+C'est une bonne leçon générale, pas seulement propre à la Game Boy :
+quand la disposition binaire d'une spécification semble étrangement bien
+ordonnée (exactement 2 + 3 + 3 bits, correspondant à « 8 opérations × 8
+registres », ou « 4 catégories × 8 numéros de bits × 8 registres »),
+c'est presque toujours intentionnel, et décoder par décalages et masques
+est préférable à écrire les 256 cas à la main.
 
-## Idea 4: `DAA` — decimal adjust, a Game Boy oddity worth seeing once
+## Idée 4 : `DAA` — l'ajustement décimal, une bizarrerie de la Game Boy à voir au moins une fois
 
-Most instructions are intuitive once you know the CPU concepts. `DAA`
-("Decimal Adjust Accumulator") is the one instruction in the whole set
-that looks like black magic the first time you read it:
+La plupart des instructions sont intuitives une fois que l'on connaît les
+concepts du CPU. `DAA` (« Decimal Adjust Accumulator ») est la seule
+instruction de tout le jeu qui ressemble à de la magie noire la première
+fois qu'on la lit :
 
 ```rust
 0x27 => {
@@ -154,23 +162,25 @@ that looks like black magic the first time you read it:
 }
 ```
 
-Context that makes this make sense: `DAA` exists to make binary addition
-*behave like* decimal addition, for programs that store numbers as
-"packed BCD" (binary-coded decimal — each nibble of a byte represents one
-decimal digit, 0-9, instead of the byte representing one combined binary
-number 0-255). After an `ADD`/`SUB` on BCD-encoded values, `DAA` patches up
-the result so each nibble is back in the valid 0-9 range, using the `H`
-and `C` flags set by the *previous* instruction to know whether a nibble
-or byte "carried over." You will almost certainly never need to
-understand this more deeply than "copy the algorithm correctly, test it
-against Blargg's test ROM, move on" — which is a perfectly fine approach
-for details this far into hardware arcana.
+Le contexte qui donne du sens à tout ça : `DAA` existe pour faire en
+sorte que l'addition binaire *se comporte comme* une addition décimale,
+pour les programmes qui stockent des nombres en « BCD compacté » (binaire
+codé décimal — chaque nibble d'un octet représente un chiffre décimal,
+0-9, au lieu que l'octet représente un seul nombre binaire combiné
+0-255). Après un `ADD`/`SUB` sur des valeurs encodées en BCD, `DAA`
+corrige le résultat pour que chaque nibble revienne dans la plage valide
+0-9, en utilisant les flags `H` et `C` positionnés par l'instruction
+*précédente* pour savoir si un nibble ou un octet a « débordé ». Vous
+n'aurez presque certainement jamais besoin de comprendre cela plus en
+profondeur que « copier l'algorithme correctement, le tester avec la ROM
+de test de Blargg, passer à autre chose » — ce qui est une approche
+parfaitement valable pour des détails aussi pointus du hardware.
 
-## Idea 5: you will under-implement opcodes first, and that's fine
+## Idée 5 : vous sous-implémenterez des opcodes d'abord, et c'est normal
 
-Throughout this grind, the `_ => {}` catch-all arm (seen since Chapter 3)
-stays in place, and individual opcodes get commented out and reinstated
-as bugs are found:
+Tout au long de cet effort, la branche générique `_ => {}` (vue depuis le
+Chapitre 3) reste en place, et des opcodes individuels sont commentés
+puis réintégrés au fur et à mesure que des bugs sont trouvés :
 
 ```rust
 // 0x38 => {
@@ -181,46 +191,52 @@ _ => {
 }
 ```
 
-This is a completely normal way to build a CPU core: implement an
-instruction, test it, find it was subtly wrong (wrong flag, wrong cycle
-count, forgot to advance `PC`), comment it out while you fix the
-underlying helper function, then re-enable it. Don't aim for a perfect
-single pass over all 256+256 opcodes — aim for a loop of
-implement → test → fix.
+C'est une façon tout à fait normale de construire un cœur de CPU :
+implémenter une instruction, la tester, découvrir qu'elle était
+subtilement incorrecte (mauvais flag, mauvais nombre de cycles, oubli
+d'avancer `PC`), la commenter pendant que vous corrigez la fonction
+d'aide sous-jacente, puis la réactiver. Ne visez pas une passe unique
+parfaite sur les 256+256 opcodes — visez une boucle d'implémenter →
+tester → corriger.
 
-## How do you know if you got it right? Blargg's `cpu_instrs.gb`
+## Comment savoir si c'est correct ? Le `cpu_instrs.gb` de Blargg
 
-This whole chapter's commits are validated the same way: by running a
-well-known community test ROM,
-[Blargg's `cpu_instrs.gb`](https://github.com/retrio/gb-test-roms)
-(already present in `tests/cpu_instrs/`, split into 11 sub-tests: 
-`01-special.gb`, `02-interrupts.gb`, and so on). This ROM exercises CPU
-instructions and reports **PASS** or **FAIL** as text, by writing
-characters out over the Game Boy's **serial port** — a simple
-communication link that, on real hardware, would talk to a cable
-connecting two consoles, and which test ROM authors long ago repurposed
-as a convenient way to print debug text out of a running ROM with no
-screen required. We capture that serial output and print it, long before
-we have any screen to display a real PASS/FAIL message on. Chapter 11
-turns this into a proper automated test suite.
+Tous les commits de ce chapitre sont validés de la même façon : en
+exécutant une ROM de test communautaire bien connue,
+[`cpu_instrs.gb` de Blargg](https://github.com/retrio/gb-test-roms)
+(déjà présente dans `tests/cpu_instrs/`, divisée en 11 sous-tests :
+`01-special.gb`, `02-interrupts.gb`, et ainsi de suite). Cette ROM
+exerce les instructions du CPU et rapporte **PASS** ou **FAIL** sous
+forme de texte, en écrivant des caractères via le **port série** de la
+Game Boy — un simple lien de communication qui, sur le hardware réel,
+aurait servi à parler à un câble reliant deux consoles, et que les
+auteurs de ROMs de test ont depuis longtemps détourné comme moyen
+pratique d'imprimer du texte de débogage depuis une ROM en cours
+d'exécution sans aucun écran requis. Nous capturons cette sortie série et
+l'affichons, bien avant d'avoir un écran pour afficher un vrai message
+PASS/FAIL. Le Chapitre 11 transforme cela en une véritable suite de tests
+automatisée.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A `Bus` struct, routing reads to the right memory region.
-- Register pairs (`BC`/`DE`/`HL`) and flag helper methods.
-- Almost the entire main opcode table, plus the `0xCB`-prefixed table via
-  bit-field decoding.
-- A way to validate correctness against a real community test ROM via
-  serial output.
+- Une structure `Bus`, qui route les lectures vers la bonne région
+  mémoire.
+- Des paires de registres (`BC`/`DE`/`HL`) et des méthodes d'aide pour les
+  flags.
+- Presque toute la table d'opcodes principale, plus la table préfixée par
+  `0xCB` via un décodage par champs de bits.
+- Un moyen de valider la justesse par rapport à une véritable ROM de test
+  communautaire via la sortie série.
 
-## What's still missing
+## Ce qui manque encore
 
-- `0xCB` `RES`/`SET` categories are stubbed (see the empty `2 => {}` /
-  `3 => {}` arms above) at this exact point in history — filled in soon
-  after.
-- `HALT` exists as an opcode by name but its famous hardware bug isn't
-  handled yet — that's Chapter 5, immediately next.
-- No interrupts yet, even though `02-interrupts.gb` is already sitting in
-  the test folder, waiting.
-- Still no I/O registers, timer, or PPU — the CPU can compute, but there's
-  nothing yet for it to meaningfully control.
+- Les catégories `0xCB` `RES`/`SET` sont des « stubs » (des coquilles
+  vides) (voir les branches vides `2 => {}` / `3 => {}` ci-dessus) à ce
+  point précis de l'historique — elles sont remplies peu après.
+- `HALT` existe comme opcode nommé mais son fameux bug hardware n'est
+  pas encore géré — c'est le Chapitre 5, juste après.
+- Pas encore d'interruptions, même si `02-interrupts.gb` est déjà présent
+  dans le dossier de test, en attente.
+- Toujours pas de registres d'E/S, de timer, ni de PPU — le CPU peut
+  calculer, mais il n'y a encore rien de significatif pour lui à
+  contrôler.

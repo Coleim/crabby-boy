@@ -1,43 +1,50 @@
-# 21. The Joypad
+# 21. Le Joypad
 
-This commit (`e128e88`, titled "Joypad all button released") is a good
-example of a very common emulator-development move: fixing a
-compatibility problem with the *simplest possible* correct-enough value,
-rather than building the full feature right away.
+Ce commit (`e128e88`, intitulé "Joypad all button released") est un bon
+exemple d'une pratique très courante en développement d'émulateur :
+corriger un problème de compatibilité avec la valeur *correcte la plus
+simple possible*, plutôt que de construire la fonctionnalité complète tout
+de suite.
 
-## The problem this solves
+## Le problème résolu
 
 ```rust
 pub fn read(&self) -> u8 {
-    0xF // was: self.p1
+    0xF // était : self.p1
 }
 ```
 
-Recall from Chapter 0/7 that the joypad register (`P1`, `0xFF00`) uses
-**active-low** logic: a bit reading `0` means "this button is pressed,"
-and `1` means "not pressed." Before this change, `read()` simply echoed
-back whatever was last *written* to the register (Chapter 7's original
-stub) — which is wrong in a way that matters: many games, during boot or
-input-polling loops, write a "which button group do you want" selector
-value and then immediately read back the result, expecting to see "no
-buttons pressed" (all relevant bits `1`) if nothing is held down. Echoing
-the write instead could make the game think buttons were being held that
-weren't, confusing boot sequences or input logic. Hardcoding `0xF` (all 4
-relevant bits set to `1`) says, unconditionally, "nothing is pressed,
-ever" — not yet a real joypad, but enough to stop this class of bug.
+Rappelez-vous du chapitre 0/7 que le registre du joypad (`P1`, `0xFF00`)
+utilise une logique **active-low** : un bit à `0` signifie "ce bouton est
+appuyé", et `1` signifie "non appuyé". Avant ce changement, `read()`
+renvoyait simplement ce qui avait été *écrit* en dernier dans le registre
+(le stub d'origine du chapitre 7) — ce qui est incorrect d'une manière qui
+compte vraiment : de nombreux jeux, pendant le boot ou les boucles de
+sondage (polling) des entrées, écrivent une valeur de sélecteur "quel
+groupe de boutons voulez-vous" puis relisent immédiatement le résultat,
+s'attendant à voir "aucun bouton appuyé" (tous les bits concernés à `1`)
+si rien n'est maintenu. Renvoyer l'écriture telle quelle pouvait faire
+croire au jeu que des boutons étaient maintenus alors que ce n'était pas
+le cas, perturbant les séquences de boot ou la logique d'entrée. Forcer
+`0xF` (les 4 bits concernés à `1`) affirme, sans condition, "rien n'est
+appuyé, jamais" — ce n'est pas encore un vrai joypad, mais c'est
+suffisant pour arrêter cette catégorie de bug.
 
-## Why "all buttons released" is a perfectly good stepping stone
+## Pourquoi "tous les boutons relâchés" est un excellent tremplin
 
-This is the same bootstrap-with-a-placeholder idea from Chapters 6 and 7
-(hardcoded LCDC/STAT/LY values before a real PPU existed): a
-*conservative*, always-safe placeholder lets dependent code (here, any
-game's input-polling logic) proceed correctly for the common case ("is
-anything pressed right now? No.") without yet investing in the full
-feature (real keyboard-to-button mapping, the actual button-group-select
-protocol from Chapter 0). As of this point in the project, that's exactly
-where things stand — and it's still true in the current codebase: no
-keyboard key is mapped to any Game Boy button yet. The terminal UI's
-`handle_events` (Chapter 23) only recognizes one key, `q`, to quit:
+C'est la même idée de bootstrap-avec-un-placeholder que dans les
+chapitres 6 et 7 (valeurs LCDC/STAT/LY codées en dur avant qu'un vrai PPU
+n'existe) : un placeholder *conservateur*, toujours sûr, permet au code
+dépendant (ici, la logique de sondage des entrées de n'importe quel jeu)
+de progresser correctement dans le cas commun ("est-ce que quelque chose
+est appuyé en ce moment ? Non.") sans investir tout de suite dans la
+fonctionnalité complète (véritable association clavier-bouton, vrai
+protocole de sélection de groupe de boutons du chapitre 0). À ce stade du
+projet, c'est exactement là où en sont les choses — et c'est toujours
+vrai dans la base de code actuelle : aucune touche de clavier n'est
+encore associée à un bouton de Game Boy. La fonction `handle_events` de
+l'interface terminal (chapitre 23) ne reconnaît qu'une seule touche, `q`,
+pour quitter :
 
 ```rust
 // src/display/ratatui_display.rs
@@ -51,32 +58,34 @@ fn handle_events(&mut self) {
 }
 ```
 
-## A small, unrelated fix riding along: wave RAM's address range
+## Une petite correction sans rapport qui passe en même temps : la plage d'adresses de la wave RAM
 
 ```diff
 -            0xFF10..=0xFF26 => self.audio.read(addr),
 +            0xFF10..=0xFF3F => self.audio.read(addr),
 ```
 
-Channel 3's wave RAM (Chapter 18) actually lives at `0xFF30`-`0xFF3F`,
-just past where the "normal" sound control registers end (`0xFF26`). This
-one-line widening of the matched range is what made that whole address
-block reachable at all — another example (like Chapter 13's missing
-zero) of a small, easy-to-miss range boundary mattering a lot in
-practice.
+La wave RAM du canal 3 (chapitre 18) se trouve en réalité à
+`0xFF30`-`0xFF3F`, juste après la fin des registres "normaux" de contrôle
+du son (`0xFF26`). Cet élargissement d'une ligne de la plage filtrée est
+ce qui a rendu tout ce bloc d'adresses enfin accessible — un autre
+exemple (comme le zéro manquant du chapitre 13) montrant qu'une petite
+limite de plage facile à manquer peut avoir un impact important en
+pratique.
 
-## What we have now
+## Ce que nous avons maintenant
 
-- A joypad register that reliably reports "nothing pressed" — enough for
-  games whose boot/input logic only needs that guarantee to proceed
-  correctly.
-- Wave RAM's full address range finally reachable.
+- Un registre du joypad qui signale de manière fiable "rien n'est
+  appuyé" — suffisant pour les jeux dont la logique de boot/entrée n'a
+  besoin que de cette garantie pour progresser correctement.
+- La plage d'adresses complète de la wave RAM enfin accessible.
 
-## What's still missing
+## Ce qui manque encore
 
-- No real button-to-key mapping exists yet, anywhere in the project —
-  this is an explicitly open piece of future work, not something this
-  book's commit history has resolved yet.
-- No Joypad interrupt (`IF` bit 4, mentioned since Chapter 14) is ever
-  set, since nothing currently detects a real button press to trigger
-  it.
+- Aucune véritable association bouton-touche n'existe encore, nulle part
+  dans le projet — c'est explicitement un travail futur ouvert, pas
+  quelque chose que l'historique des commits de ce livre a encore
+  résolu.
+- Aucune interruption (interrupt) Joypad (`IF` bit 4, mentionnée depuis
+  le chapitre 14) n'est jamais déclenchée, car rien ne détecte
+  actuellement un véritable appui sur un bouton pour la déclencher.
