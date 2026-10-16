@@ -108,12 +108,12 @@ est en soi une compétence utile.
 
 ## Ce qui manque encore
 
-- Aucune *tile map* n'est lue (le concept de "tile map" du chapitre 0/du
-  guide associé) — ceci montre chaque tuile existant en VRAM, pas
-  lesquelles un jeu a effectivement choisi de placer où sur son
-  arrière-plan (background).
+- *Mise à jour* : la lecture de la tile map elle-même (pas seulement des
+  données de tuile brutes) est couverte aux chapitres 28-29, qui
+  construisent directement sur le décodage à 2 bits par pixel introduit
+  ici.
 - Pas de défilement (`SCX`/`SCY`), pas de palette (`BGP`), pas de fenêtre
   (window), pas de sprites — tous explicitement hors du champ de cet
   outil de débogage brut, et tous repris correctement dans le regard vers
-  l'avenir du chapitre 27, puis dans les chapitres 28-29 et le guide
+  l'avenir du chapitre 27, puis dans les chapitres 32-33 et le guide
   [PPU — Background Rendering Guide](../ppu-background.md).

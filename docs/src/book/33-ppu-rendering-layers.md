@@ -1,6 +1,6 @@
-# 29. Les trois couches de rendu : background, window et objects
+# 33. Les trois couches de rendu : background, window et objects
 
-Le chapitre 28 a établi *quand* le PPU produit chaque pixel. Avant de
+Le chapitre 32 a établi *quand* le PPU produit chaque pixel. Avant de
 construire le mécanisme qui le fait réellement (le pixel FIFO et le
 fetcher, couverts en détail dans le guide associé), il faut comprendre
 *ce qui* compose ce pixel. La réponse : jusqu'à trois couches distinctes,
@@ -43,6 +43,50 @@ bon ordre — que le vrai mécanisme du PPU ne peut pas se contenter de
 dessiner trois images séparées puis les fusionner après coup. Il les
 construit toutes les trois en même temps, dot par dot, pendant le mode 3
 d'une seule scanline.
+
+## D'où chaque couche tire réellement ses données
+
+Les trois couches partagent certains mécanismes et en ont d'autres bien
+à elles. Le registre `LCDC` (`$FF40`) est celui qui, bit par bit,
+contrôle qui lit quoi et où.
+
+### Background
+
+- Passe par une tile map, `$9800` ou `$9C00` — le choix se fait via le
+  **bit 3 de `LCDC`**.
+- Chaque entrée de cette map est un *tile index* (un octet), résolu en
+  adresse de tile data via le **bit 4 de `LCDC`** (mode signé/non-signé
+  — voir la section 3.3 du [guide PPU](../ppu-background.md)).
+
+### Window
+
+- Oui, aussi via une tile map — mais la sélection est **indépendante**
+  de celle du Background : le **bit 6 de `LCDC`** choisit laquelle des
+  deux maps (`$9800`/`$9C00`) la Window utilise, séparément du bit 3 qui
+  choisit celle du Background. Un jeu peut donc parfaitement avoir le
+  Background sur une map et la Window sur l'autre, en même temps.
+- Elle partage en revanche la **même tile data area** que le Background
+  (le même bit 4 de `LCDC`) — ce n'est pas un jeu de tuiles différent,
+  juste une disposition différente à l'écran : position fixe, pas de
+  scroll, contrôlée par `WX`/`WY` au lieu de `SCX`/`SCY`.
+- Donc Window = exactement le même mécanisme que Background (tile map →
+  tile data → palette), juste une tile map séparée et un positionnement
+  différent.
+
+### Objects (sprites)
+
+- Là, **pas de tile map du tout**. L'OAM (`$FE00`–`$FE9F`) contient
+  directement, pour chacun des 40 sprites possibles, **4 octets** : la
+  position Y, la position X, l'index de tuile, et un octet d'attributs
+  (retournement horizontal/vertical, palette, priorité par rapport au
+  background).
+- Cet index de tuile pointe **directement** dans la tile data area
+  (`$8000` et au-delà), **toujours en mode non-signé**, peu importe la
+  valeur du bit 4 de `LCDC` — ce bit ne concerne que Background/Window.
+  C'est une nuance qui piège beaucoup de monde : l'OAM ne contient pas
+  de pixels, juste une référence + une position, exactement comme une
+  entrée de tile map — sauf qu'il n'y a pas de grille 32×32
+  intermédiaire : chaque sprite a sa position en pixels, libre.
 
 ## Ce qui vient ensuite
 

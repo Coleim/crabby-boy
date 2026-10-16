@@ -4,8 +4,10 @@ Ce chapitre ne introduit pas de nouveau commit — c'est une pause
 délibérée pour faire le point, exactement là où le sous-titre de ce
 livre promettait de s'arrêter : au PPU, le seul sous-système encore au
 tout début de son parcours comparé à tout ce qui a été construit
-jusqu'ici. Les chapitres suivants (28 et 29) reprennent directement là
-où celui-ci s'arrête.
+jusqu'ici. Les chapitres 28 à 31 continuent d'abord à outiller le
+débogage (VRAM, tile map, OAM, robustesse de la boucle principale) ;
+les chapitres 32 et 33 reprennent ensuite directement là où celui-ci
+s'arrête, avec l'explication approfondie du rendu PPU lui-même.
 
 ## Un rapide récapitulatif de tout le parcours
 
@@ -85,6 +87,8 @@ sur STAT (le chapitre 14 a laissé le LCD STAT comme une adresse de
 vecteur sans déclencheur réel pour l'instant).
 
 C'est, authentiquement, là où en est le projet aujourd'hui. Les
-chapitres 28 et 29 posent les bases conceptuelles (timing par scanline,
-puis les trois couches de rendu) qui préparent ce travail ; le reste
-s'écrira au fur et à mesure qu'il sera construit.
+chapitres 28 à 31 continuent d'outiller le débogage (VRAM, tile map,
+OAM, robustesse de la boucle principale) ; les chapitres 32 et 33 posent
+ensuite les bases conceptuelles (timing par scanline, puis les trois
+couches de rendu) qui préparent ce travail ; le reste s'écrira au fur et
+à mesure qu'il sera construit.

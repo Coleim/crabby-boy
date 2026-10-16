@@ -1,4 +1,4 @@
-# 28. Le balayage ligne par ligne : comment une frame est réellement dessinée
+# 32. Le balayage ligne par ligne : comment une frame est réellement dessinée
 
 Avant d'écrire la moindre ligne de code pour un vrai rendu, il faut une
 image mentale correcte de *comment* le PPU produit une image — parce que
@@ -64,7 +64,7 @@ modes 2/3/0.
 ## Ce qui vient ensuite
 
 Ce chapitre ne modifie aucun code — c'est une base conceptuelle. Le
-chapitre 29 couvre la seconde moitié du problème (que représente
+chapitre 33 couvre la seconde moitié du problème (que représente
 visuellement un pixel, une fois que le PPU sait *quand* le produire), et
 le guide [PPU — Background Rendering Guide](../ppu-background.md)
 détaille la machine à états complète (le pixel FIFO et le fetcher) qui

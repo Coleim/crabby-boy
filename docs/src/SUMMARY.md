@@ -54,5 +54,13 @@
 - [Partie IX — Retour au PPU]()
   - [26. Visualiser la VRAM](./book/26-vram-tile-viewer.md)
   - [27. Où nous avons laissé le PPU, et ce qui vient ensuite](./book/27-back-to-the-ppu.md)
-  - [28. Le balayage ligne par ligne](./book/28-ppu-scanline-timing.md)
-  - [29. Les trois couches de rendu](./book/29-ppu-rendering-layers.md)
+
+- [Partie X — Outiller le débogage, puis fiabiliser la boucle principale]()
+  - [28. La VRAM a deux étages : tiles et tile map](./book/28-vram-tiles-and-tilemaps.md)
+  - [29. Afficher la tile map, et corriger un bug de performance terminal](./book/29-vram-tilemap-viewer.md)
+  - [30. Visualiser l'OAM (à venir)](./book/30-oam-viewer-placeholder.md)
+  - [31. Un thread dédié à l'émulation (à venir)](./book/31-emulation-thread-placeholder.md)
+
+- [Partie XI — Comprendre le rendu PPU en profondeur]()
+  - [32. Le balayage ligne par ligne](./book/32-ppu-scanline-timing.md)
+  - [33. Les trois couches de rendu](./book/33-ppu-rendering-layers.md)
