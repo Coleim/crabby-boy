@@ -5,3 +5,4 @@ pub mod fps_counter;
 pub mod game;
 pub mod ratatui_display;
 pub mod vram_registers;
+pub mod vram_tilemap_registers;

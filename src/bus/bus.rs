@@ -16,8 +16,9 @@ use crate::{audio::audio_buffer::AudioBuffer, bus::iobridge::IOBridge};
 // FF80	FFFE	High RAM (HRAM)
 // FFFF	FFFF	Interrupt Enable register (IE)
 pub struct Bus {
-    rom: Vec<u8>, // full ROM, any size
-    pub vram: [u8; 0x2000],
+    rom: Vec<u8>,                   // full ROM, any size
+    pub vram_tiles: [u8; 0x1800],   // $8000-$97FF
+    pub vram_tilemap: [u8; 0x0800], // $9800-$9BFF $9C00-$9FFF
     eram: [u8; 0x2000],
     wram: [u8; 0x2000],
     oam: [u8; 0x2000],
@@ -32,7 +33,8 @@ impl Bus {
     pub fn new(rom_data: Vec<u8>) -> Self {
         Bus {
             rom: rom_data,
-            vram: [0; 0x2000],
+            vram_tiles: [0; 0x1800],
+            vram_tilemap: [0; 0x0800],
             eram: [0; 0x2000],
             wram: [0; 0x2000],
             oam: [0; 0x2000],
@@ -92,7 +94,8 @@ impl Bus {
                 let index = bank * bank_size + (addr as usize - 0x4000);
                 self.rom.get(index).copied().unwrap_or(0xFF)
             }
-            0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize],
+            0x8000..=0x97FF => self.vram_tiles[(addr - 0x8000) as usize],
+            0x9800..=0x9FFF => self.vram_tilemap[(addr - 0x9800) as usize],
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize],
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
             0xE000..=0xFDFF => {
@@ -131,7 +134,8 @@ impl Bus {
             0x6000..=0x7FFF => {
                 println!("Banking Mode Select (Write Only): {:02x}", val);
             }
-            0x8000..=0x9FFF => self.vram[(addr - 0x8000) as usize] = val,
+            0x8000..=0x97FF => self.vram_tiles[(addr - 0x8000) as usize] = val,
+            0x9800..=0x9FFF => self.vram_tilemap[(addr - 0x9800) as usize] = val,
             0xA000..=0xBFFF => self.eram[(addr - 0xA000) as usize] = val,
             0xC000..=0xDFFF => self.wram[(addr - 0xC000) as usize] = val,
             0xE000..=0xFDFF => self.wram[(addr - 0xE000) as usize] = val, // echo of WRAM

@@ -24,8 +24,8 @@ impl CrabbyBoy {
         println!("ROM size: {} bytes", rom_data.len());
         let mut bus: Bus = Bus::new(rom_data);
 
-        let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
-        // let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(32768)));
+        // let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(8192)));
+        let audio_buffer = Arc::new(Mutex::new(AudioBuffer::new(32768)));
         bus.set_audio_buffer(audio_buffer.clone());
 
         let header: CartdrigeHeader = CartdrigeHeader::new(&bus.get_rom());

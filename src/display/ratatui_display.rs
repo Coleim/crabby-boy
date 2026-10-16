@@ -11,7 +11,10 @@ use ratatui::{
 
 use crate::{
     crabby_boy::CrabbyBoy,
-    display::{cartridge_header, cpu_registers, display::Display, game, vram_registers},
+    display::{
+        cartridge_header, cpu_registers, display::Display, game, vram_registers,
+        vram_tilemap_registers,
+    },
 };
 
 pub struct RatatuiDisplay {
@@ -47,7 +50,13 @@ impl RatatuiDisplay {
         game::render(frame, l_vmiddle);
         cpu_registers::render(frame, l_bottom, &emulator.cpu);
 
-        vram_registers::render(frame, m_top, &emulator.bus.vram);
+        vram_registers::render(frame, m_top, &emulator.bus.vram_tiles);
+        vram_tilemap_registers::render(
+            frame,
+            m_vmiddle,
+            &emulator.bus.vram_tilemap,
+            &emulator.bus.vram_tiles,
+        );
     }
 }
 

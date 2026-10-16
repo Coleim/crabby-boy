@@ -10,30 +10,32 @@ use crate::bus::bus::Bus;
 use crate::crabby_boy::CrabbyBoy;
 use crate::display::display::Display;
 use crate::display::ratatui_display::RatatuiDisplay;
+use cli_log::*;
 use std::env;
 use std::time::{Duration, Instant};
 
 fn main() -> Result<(), String> {
+    init_cli_log!();
     let args: Vec<String> = env::args().collect();
 
     let file_path = if args.len() > 1 {
         &args[1]
     } else {
-        // "./tests/Kirby.gb"
-        "./tests/Tetris.gb"
+        "./tests/Kirby.gb"
+        // "./tests/Tetris.gb"
     };
 
     let mut crabby = CrabbyBoy::new(file_path)?;
-    // let _audio_output =
-    //     if let Some((output, sample_rate)) = AudioOutput::new(crabby.audio_buffer.clone()) {
-    //         // Very important to play sound
-    //         crabby.set_audio_sample_rate(sample_rate);
-    //         eprintln!("Audio initialized at {} Hz", sample_rate);
-    //         Some(output)
-    //     } else {
-    //         None
-    //     };
-    //
+    let _audio_output =
+        if let Some((output, sample_rate)) = AudioOutput::new(crabby.audio_buffer.clone()) {
+            // Very important to play sound
+            crabby.set_audio_sample_rate(sample_rate);
+            eprintln!("Audio initialized at {} Hz", sample_rate);
+            Some(output)
+        } else {
+            None
+        };
+
     let mut display = RatatuiDisplay::new();
 
     // We need to target 60 FPS
