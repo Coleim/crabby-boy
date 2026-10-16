@@ -8,6 +8,7 @@ use ratatui::{
     text::Line,
     widgets::Block,
 };
+use ratatui_image::picker::Picker;
 
 use crate::{
     crabby_boy::CrabbyBoy,
@@ -20,6 +21,7 @@ use crate::{
 pub struct RatatuiDisplay {
     running: bool,
     terminal: DefaultTerminal,
+    picker: Picker,
 }
 
 impl RatatuiDisplay {
@@ -27,10 +29,11 @@ impl RatatuiDisplay {
         RatatuiDisplay {
             running: true,
             terminal: ratatui::init(),
+            picker: Picker::from_query_stdio().expect("impossible de détecter le terminal"),
         }
     }
 
-    fn draw_ui(frame: &mut Frame, emulator: &CrabbyBoy) {
+    fn draw_ui(picker: &Picker, frame: &mut Frame, emulator: &CrabbyBoy) {
         let fps = emulator.fps.fps();
         let title = Line::from(format!("CRABBY BOY ({}) FPS", fps));
         let block = Block::bordered()
@@ -47,12 +50,13 @@ impl RatatuiDisplay {
 
         frame.render_widget(block, frame.area());
         cartridge_header::render(frame, l_top, &emulator.header);
-        game::render(frame, l_vmiddle);
+        game::render(frame, picker, l_vmiddle);
         cpu_registers::render(frame, l_bottom, &emulator.cpu);
 
-        vram_registers::render(frame, m_top, &emulator.bus.vram_tiles);
+        vram_registers::render(frame, picker, m_top, &emulator.bus.vram_tiles);
         vram_tilemap_registers::render(
             frame,
+            picker,
             m_vmiddle,
             &emulator.bus.vram_tilemap,
             &emulator.bus.vram_tiles,
@@ -63,7 +67,7 @@ impl RatatuiDisplay {
 impl Display for RatatuiDisplay {
     fn draw(&mut self, emulator: &crate::crabby_boy::CrabbyBoy) {
         self.terminal
-            .draw(|frame| Self::draw_ui(frame, emulator))
+            .draw(|frame| Self::draw_ui(&self.picker, frame, emulator))
             .ok();
     }
 

@@ -12,7 +12,7 @@ use ratatui_image::{Image, Resize, picker::Picker};
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
 
-pub fn render(frame: &mut Frame, area: Rect) {
+pub fn render(frame: &mut Frame, picker: &Picker, area: Rect) {
     // TODO: Replace with real PPU buffer
     let dyn_img = generate_buffer();
 
@@ -30,7 +30,6 @@ pub fn render(frame: &mut Frame, area: Rect) {
 
     let size = Size::new(inner_area.width, inner_area.height);
 
-    let picker = Picker::from_query_stdio().expect("impossible de détecter le terminal");
     let image = picker
         .new_protocol(dyn_img, size, Resize::Scale(None))
         .unwrap();

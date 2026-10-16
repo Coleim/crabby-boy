@@ -13,7 +13,7 @@ use ratatui::{
 };
 use ratatui_image::{Image, Resize, picker::Picker};
 
-pub fn render(frame: &mut Frame, area: Rect, tilemap: &[u8], tiles: &[u8]) {
+pub fn render(frame: &mut Frame, picker: &Picker, area: Rect, tilemap: &[u8], tiles: &[u8]) {
     let block = Block::bordered()
         .title(Line::from("VRAM-Tiles"))
         .padding(Padding {
@@ -29,7 +29,6 @@ pub fn render(frame: &mut Frame, area: Rect, tilemap: &[u8], tiles: &[u8]) {
     let dyn_img = generate_buffer(tilemap, tiles);
     let size = Size::new(inner_area.width, inner_area.height);
 
-    let picker = Picker::from_query_stdio().expect("impossible de détecter le terminal");
     let image = picker
         .new_protocol(dyn_img, size, Resize::Scale(None))
         .unwrap();
